@@ -23,7 +23,6 @@ jobs:
     env:
       CONFIGURATION: release
       PYTHON_VERSION: "3.11"
-      PYTHON_SITE_PACKAGES_SRC: ${{ runner.temp }}/podcast-worker-site-packages
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
@@ -53,6 +52,7 @@ jobs:
           echo "APP_VERSION=${version}" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "DMG_NAME=PodcastTranscriptStudio-${version}.dmg" >> "$GITHUB_ENV"
+          echo "PYTHON_SITE_PACKAGES_SRC=${RUNNER_TEMP}/podcast-worker-site-packages" >> "$GITHUB_ENV"
 
       - name: Show toolchain
         run: |
@@ -100,10 +100,10 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PodcastTranscriptStudio-${{ env.APP_VERSION }}-macOS
+          name: PodcastTranscriptStudio-macOS-${{ github.run_number }}
           path: |
-            dist/${{ env.DMG_NAME }}
-            dist/${{ env.DMG_NAME }}.sha256
+            dist/*.dmg
+            dist/*.dmg.sha256
           if-no-files-found: error
           retention-days: 14
 
