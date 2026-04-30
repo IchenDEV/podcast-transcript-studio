@@ -6,13 +6,80 @@ CONFIGURATION="${CONFIGURATION:-release}"
 APP_NAME="Podcast Transcript Studio"
 EXECUTABLE_NAME="PodcastTranscriptStudioApp"
 RESOURCE_BUNDLE_NAME="PodcastTranscriptStudio_PodcastTranscriptStudioCore.bundle"
+BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-ai.openclaw.PodcastTranscriptStudio}"
+APP_VERSION="${APP_VERSION:-0.1.0}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
 DIST_DIR="${ROOT_DIR}/dist"
 APP_DIR="${DIST_DIR}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
-PYTHON_HOME_SRC="${PYTHON_HOME_SRC:-/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9}"
-PYTHON_SITE_PACKAGES_SRC="${PYTHON_SITE_PACKAGES_SRC:-$HOME/Library/Python/3.9/lib/python/site-packages}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+VERIFY_PYTHON_IMPORTS="${VERIFY_PYTHON_IMPORTS:-torch torchaudio transformers pyannote.audio faster_whisper}"
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "missing python executable: $PYTHON_BIN" >&2
+  exit 1
+fi
+
+detect_python_home() {
+  "$PYTHON_BIN" - <<'PY'
+import sys
+print(sys.base_prefix)
+PY
+}
+
+detect_python_site_packages() {
+  "$PYTHON_BIN" - <<'PY'
+from pathlib import Path
+import site
+import sys
+import sysconfig
+
+candidates = []
+try:
+    candidates.extend(site.getsitepackages())
+except Exception:
+    pass
+
+user_site = site.getusersitepackages()
+if sys.prefix == sys.base_prefix:
+    ordered = [user_site] + candidates
+else:
+    ordered = candidates + [user_site]
+
+for candidate in ordered:
+    path = Path(candidate)
+    if path.exists():
+        print(path)
+        break
+else:
+    print(Path(sysconfig.get_paths()["purelib"]))
+PY
+}
+
+check_broken_symlinks() {
+  local root="$1"
+  local broken=0
+  while IFS= read -r -d '' link_path; do
+    local target
+    local resolved
+    target="$(readlink "$link_path")"
+    if [[ "$target" = /* ]]; then
+      resolved="$target"
+    else
+      resolved="$(dirname "$link_path")/$target"
+    fi
+    if [ ! -e "$resolved" ]; then
+      echo "broken symlink: $link_path -> $target" >&2
+      broken=1
+    fi
+  done < <(find "$root" -type l -print0)
+  return "$broken"
+}
+
+PYTHON_HOME_SRC="${PYTHON_HOME_SRC:-$(detect_python_home)}"
+PYTHON_SITE_PACKAGES_SRC="${PYTHON_SITE_PACKAGES_SRC:-$(detect_python_site_packages)}"
 
 mkdir -p "$DIST_DIR"
 
@@ -36,6 +103,11 @@ if [ ! -d "$PYTHON_HOME_SRC" ]; then
   exit 1
 fi
 
+if [ ! -x "$PYTHON_HOME_SRC/bin/python3" ]; then
+  echo "missing python runtime executable: $PYTHON_HOME_SRC/bin/python3" >&2
+  exit 1
+fi
+
 if [ ! -d "$PYTHON_SITE_PACKAGES_SRC" ]; then
   echo "missing python site-packages source: $PYTHON_SITE_PACKAGES_SRC" >&2
   exit 1
@@ -55,7 +127,8 @@ PYTHON_SITE_PACKAGES_DST="${RUNTIME_DIR}/site-packages"
 mkdir -p "$RUNTIME_DIR"
 rm -rf "$PYTHON_HOME_DST" "$PYTHON_SITE_PACKAGES_DST"
 ditto "$PYTHON_HOME_SRC" "$PYTHON_HOME_DST"
-rsync -a --delete \
+find "$PYTHON_HOME_DST" -path "*/site-packages" -type l -delete
+rsync -aL --delete \
   --exclude '__pycache__' \
   --exclude '*.pyc' \
   --exclude '*.pyo' \
@@ -73,7 +146,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
   <key>CFBundleExecutable</key>
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.openclaw.PodcastTranscriptStudio</string>
+  <string>${BUNDLE_IDENTIFIER}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -81,9 +154,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${APP_VERSION}</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>${BUILD_NUMBER}</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>NSHighResolutionCapable</key>
@@ -92,13 +165,38 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
 </plist>
 EOF
 
-env \
-  PYTHONHOME="$PYTHON_HOME_DST" \
-  PYTHONPATH="$PYTHON_SITE_PACKAGES_DST" \
-  PYTHONNOUSERSITE=1 \
-  "$PYTHON_HOME_DST/bin/python3" -c 'import torch, torchaudio, transformers, pyannote.audio, faster_whisper; print("bundled python runtime OK")'
+if [ "${SKIP_PYTHON_RUNTIME_CHECK:-0}" != "1" ]; then
+  env \
+    PYTHONHOME="$PYTHON_HOME_DST" \
+    PYTHONPATH="$PYTHON_SITE_PACKAGES_DST" \
+    PYTHONNOUSERSITE=1 \
+    "$PYTHON_HOME_DST/bin/python3" - "$VERIFY_PYTHON_IMPORTS" <<'PY'
+import importlib
+import sys
 
-codesign --force --deep --sign - "$APP_DIR"
-codesign --verify --deep --strict "$APP_DIR"
+missing = []
+for module_name in sys.argv[1].split():
+    try:
+        importlib.import_module(module_name)
+    except Exception as exc:
+        missing.append(f"{module_name}: {exc}")
+
+if missing:
+    raise SystemExit("bundled python runtime check failed:\n" + "\n".join(missing))
+
+print("bundled python runtime OK")
+PY
+else
+  echo "skipped bundled python runtime check"
+fi
+
+check_broken_symlinks "$APP_DIR"
+
+if [ "${SKIP_CODESIGN:-0}" != "1" ]; then
+  codesign --force --deep --sign "${CODESIGN_IDENTITY:--}" "$APP_DIR"
+  codesign --verify --deep --strict "$APP_DIR"
+else
+  echo "skipped codesign"
+fi
 
 echo "built app bundle: $APP_DIR"

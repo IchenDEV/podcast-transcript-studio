@@ -1,0 +1,120 @@
+name: macOS DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: "Version used in Info.plist and DMG file name"
+        required: false
+        default: "0.1.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-dmg:
+    name: Build DMG
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    env:
+      CONFIGURATION: release
+      PYTHON_VERSION: "3.11"
+      PYTHON_SITE_PACKAGES_SRC: ${{ runner.temp }}/podcast-worker-site-packages
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-worker.txt
+
+      - name: Select build version
+        env:
+          INPUT_APP_VERSION: ${{ github.event.inputs.app_version }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [ -n "${INPUT_APP_VERSION}" ]; then
+            version="${INPUT_APP_VERSION}"
+          else
+            version="0.1.0"
+          fi
+
+          echo "APP_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "DMG_NAME=PodcastTranscriptStudio-${version}.dmg" >> "$GITHUB_ENV"
+
+      - name: Show toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+          python --version
+
+      - name: Install worker runtime dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          rm -rf "$PYTHON_SITE_PACKAGES_SRC"
+          mkdir -p "$PYTHON_SITE_PACKAGES_SRC"
+          python -m pip install --target "$PYTHON_SITE_PACKAGES_SRC" -r requirements-worker.txt
+
+      - name: Package model assets
+        if: env.HF_TOKEN != ''
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade huggingface_hub
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+
+          repos = [
+              "openai/whisper-tiny",
+              "pyannote/speaker-diarization-3.1",
+              "pyannote/segmentation-3.0",
+              "pyannote/wespeaker-voxceleb-resnet34-LM",
+          ]
+
+          token = os.environ["HF_TOKEN"]
+          for repo in repos:
+              snapshot_download(repo_id=repo, token=token)
+          PY
+          ./scripts/package_models.sh
+
+      - name: Build DMG
+        env:
+          PYTHON_BIN: python
+          VERIFY_PYTHON_IMPORTS: torch torchaudio transformers pyannote.audio faster_whisper
+        run: ./scripts/build_macos_dmg.sh
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PodcastTranscriptStudio-${{ env.APP_VERSION }}-macOS
+          path: |
+            dist/${{ env.DMG_NAME }}
+            dist/${{ env.DMG_NAME }}.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release assets
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "dist/$DMG_NAME" "dist/$DMG_NAME.sha256" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "dist/$DMG_NAME" "dist/$DMG_NAME.sha256" --generate-notes
+          fi
