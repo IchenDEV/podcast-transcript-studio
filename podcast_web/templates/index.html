@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>新建任务</h2>
+  <form action="/jobs" method="post" enctype="multipart/form-data" class="stack">
+    <label>
+      选择音频或视频文件
+      <input type="file" name="file" required />
+    </label>
+    <label>
+      转写模式
+      <select name="mode">
+        {% for mode in modes %}
+        <option value="{{ mode.key.value }}" {% if mode.key.value == default_mode %}selected{% endif %}>{{ mode.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="inline"><input type="checkbox" name="diarize" checked /> 启用多说话人</label>
+    <label class="inline"><input type="checkbox" name="clean_fillers" checked /> 清理口语词</label>
+    <button type="submit">开始转写</button>
+  </form>
+</section>
+{% endblock %}

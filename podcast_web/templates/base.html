@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title or 'Podcast Transcript Studio' }}</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1><a href="/">Podcast Transcript Studio</a></h1>
+      <nav>
+        <a href="/">新建任务</a>
+        <a href="/jobs">任务列表</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

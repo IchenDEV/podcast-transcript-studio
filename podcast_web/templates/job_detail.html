@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>任务 #{{ job.id }} - {{ job.filename }}</h2>
+  <p>状态：<strong>{{ job.status }}</strong></p>
+  {% if job.error_message %}
+  <pre class="error">{{ job.error_message }}</pre>
+  {% endif %}
+  <p>
+    <a href="/jobs/{{ job.id }}/download/txt">下载 TXT</a>
+    {% if json_path %} · <a href="/jobs/{{ job.id }}/download/json">下载 JSON</a>{% endif %}
+  </p>
+</section>
+
+<section class="card">
+  <h3>可读稿</h3>
+  {% if document and document.readable_text %}
+    <pre>{{ document.readable_text }}</pre>
+  {% else %}
+    <p>结果暂未生成。</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h3>逐字稿</h3>
+  {% if document and document.sections %}
+    {% for section in document.sections %}
+      <article class="section-block">
+        <h4>{{ section.title }}</h4>
+        <ul class="segments">
+          {% for segment in section.segments %}
+          <li>
+            <span class="time">[{{ segment.start }} - {{ segment.end }}]</span>
+            <span class="speaker">{{ segment.speaker }}</span>
+            <span class="text">{{ segment.text }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </article>
+    {% endfor %}
+  {% else %}
+    <p>结果暂未生成。</p>
+  {% endif %}
+</section>
+{% endblock %}

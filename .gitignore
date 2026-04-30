@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.worker-venv/
+venv/
+
+# Swift
+.build/
+
+# macOS
+.DS_Store
+
+# Local runtime data
+data/
+tmp/
+
+# Build output
+dist/
+
+# Local model assets
+Sources/PodcastTranscriptStudioCore/Resources/Models/
