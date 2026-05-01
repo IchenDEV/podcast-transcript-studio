@@ -9,6 +9,7 @@ Podcast Transcript Studio is a local-first transcription tool for podcasts, inte
 The project is a working development version with the following capabilities:
 
 - Upload local audio or video files
+- Import audio from public podcast URLs, including Apple Podcasts, Xiaoyuzhou, Ximalaya public RSS/album pages, and direct audio links
 - Create transcription jobs and view job status
 - Generate readable transcripts and verbatim transcripts
 - Export `TXT`, `JSON`, `SRT`, and `MD`
@@ -33,7 +34,9 @@ Open:
 
 - <http://127.0.0.1:8000>
 
-Upload a file, choose a mode, and create a job. After the job completes, the result page shows the transcript and download links.
+Upload a file or paste a public podcast URL, choose a mode, and create a job. After the job completes, the result page shows the transcript and download links.
+
+URL import only handles publicly accessible audio pages, RSS feeds, and direct audio links. For login-only or paid content, download the audio file first.
 
 ## Model Files
 
@@ -42,16 +45,23 @@ The default ASR model is `openai/whisper-tiny`. Speaker diarization depends on p
 Local model resource directory:
 
 ```text
-Sources/PodcastTranscriptStudioCore/Resources/Models/
+~/Library/Application Support/PodcastTranscriptStudio/Models/
 ```
 
-Model files are large and are not committed to the repository. Before packaging the macOS app, log in to Hugging Face, accept the required model licenses, and run `./scripts/package_models.sh`.
+The macOS settings view can change the model directory and download the required models. For speaker diarization, accept the required pyannote model licenses on Hugging Face first, then paste a token in the settings view.
+
+To ship models inside the DMG, log in to Hugging Face, accept the required model licenses, and run `./scripts/package_models.sh`. That script copies model snapshots to:
+
+```text
+Sources/PodcastTranscriptStudioCore/Resources/Models/
+```
 
 ## Project Layout
 
 ```text
 podcast_web/                  FastAPI web entrypoint
 packages/core/                Transcript data structures and readable transcript logic
+packages/podcast_fetcher/     Public podcast URL resolution and audio download
 packages/transcriber/         User modes and worker preset mapping
 packages/python_worker/       Python worker entrypoint and transcription script
 Sources/PodcastTranscriptStudioCore/  Swift core module
@@ -92,6 +102,13 @@ Model resource script:
 
 ```bash
 ./scripts/package_models.sh
+```
+
+Run the same model downloader used by the settings view:
+
+```bash
+python Sources/PodcastTranscriptStudioCore/Resources/Scripts/download_models.py \
+  --models-dir "$HOME/Library/Application Support/PodcastTranscriptStudio/Models"
 ```
 
 Install worker inference dependencies only when needed:

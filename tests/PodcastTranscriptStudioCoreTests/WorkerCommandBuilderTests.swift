@@ -17,6 +17,28 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains("--preset"))
         XCTAssertTrue(command.arguments.contains("balanced"))
         XCTAssertTrue(command.environment["PODCAST_MODELS_DIR"]?.hasSuffix("Models") == true)
+        XCTAssertTrue(command.environment["PODCAST_BUNDLED_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.outputTextURL.path.contains(job.id.uuidString))
+    }
+
+    func test_command_builder_uses_local_models_when_available() throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let config = AppConfiguration.preview(baseDirectory: base)
+        let whisper = config.modelsDirectory.appendingPathComponent("whisper-tiny", isDirectory: true)
+        let diarization = config.modelsDirectory.appendingPathComponent("speaker-diarization-3.1", isDirectory: true)
+        try FileManager.default.createDirectory(at: whisper, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: diarization, withIntermediateDirectories: true)
+
+        let command = try WorkerCommandBuilder(configuration: config).makeCommand(
+            job: TranscriptionJob(filename: "demo.m4a"),
+            sourceURL: URL(fileURLWithPath: "/tmp/input/demo.m4a"),
+            diarize: true,
+            cleanFillers: true
+        )
+
+        XCTAssertTrue(command.arguments.contains("--asr-model"))
+        XCTAssertTrue(command.arguments.contains(whisper.path))
+        XCTAssertTrue(command.arguments.contains("--diarization-model"))
+        XCTAssertTrue(command.arguments.contains(diarization.path))
     }
 }

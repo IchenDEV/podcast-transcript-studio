@@ -10,6 +10,8 @@ macOS app 是桌面端入口，使用 SwiftUI 构建窗口界面，并通过 `Po
 - 编辑说话人显示名
 - 解析转写结果
 - 导出 `TXT`、`JSON`、`MD`、`SRT`
+- 在设置页修改本地目录
+- 在设置页下载转写模型
 - 使用打包脚本准备模型和 worker 资源
 
 ## 开发运行
@@ -28,6 +30,24 @@ swift run PodcastTranscriptStudioApp
 
 ```text
 dist/Podcast Transcript Studio.app
+```
+
+## 应用图标
+
+图标资源位于：
+
+```text
+assets/AppIcon.icns
+assets/AppIcon.png
+```
+
+`build_macos_app.sh` 会把 `assets/AppIcon.icns` 复制到 app bundle，并在 `Info.plist` 写入 `CFBundleIconFile`。
+
+改图标后执行：
+
+```bash
+python3 scripts/generate_app_icon.py
+./scripts/build_macos_app.sh
 ```
 
 如果需要指定版本号、构建号或 Python 运行时：
@@ -103,6 +123,20 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
 
 ## 模型与 worker 资源
+
+运行时模型目录默认是：
+
+```text
+~/Library/Application Support/PodcastTranscriptStudio/Models/
+```
+
+macOS 设置页可以修改模型、任务、导出和日志目录。模型下载按钮会调用：
+
+```text
+Resources/Scripts/download_models.py
+```
+
+如果需要多说话人模型，需要先在 Hugging Face 接受 pyannote 模型许可，并在设置页填写 token。
 
 先准备 Hugging Face 本地缓存，然后执行：
 

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from packages.podcast_fetcher import PodcastAudioError, download_podcast_audio
 from podcast_web.config import get_settings
 from podcast_web.db import Base, make_engine, make_session_factory
 from podcast_web.repository import JobRepository
@@ -46,19 +47,32 @@ def create_app(testing: bool = False) -> FastAPI:
 
     @app.post('/jobs')
     def create_job(
-        file: UploadFile = File(...),
+        file: Optional[UploadFile] = File(default=None),
+        source_url: Optional[str] = Form(default=None),
         diarize: Optional[str] = Form(default=None),
         clean_fillers: Optional[str] = Form(default=None),
         mode: str = Form(default=UserMode.STANDARD.value),
     ):
-        source_path = transcription_service.save_upload(settings, file, file.filename)
-        job = repository.create_job(filename=file.filename, source_path=str(source_path))
+        link = (source_url or '').strip()
+        if link:
+            try:
+                source_path, _ = download_podcast_audio(link, settings.uploads_dir)
+            except PodcastAudioError as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
+            filename = source_path.name
+        elif file and file.filename:
+            source_path = transcription_service.save_upload(settings, file, file.filename)
+            filename = file.filename
+        else:
+            raise HTTPException(status_code=400, detail='请选择音频文件，或输入播客链接。')
+
+        job = repository.create_job(filename=filename, source_path=str(source_path))
         transcription_service.start_job(
             repository=repository,
             settings=settings,
             job_id=job.id,
             source_path=source_path,
-            filename=file.filename,
+            filename=filename,
             diarize=bool(diarize),
             clean_fillers=bool(clean_fillers),
             mode=mode,

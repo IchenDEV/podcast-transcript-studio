@@ -34,7 +34,13 @@ public struct WorkerCommandBuilder {
             "--json", outputJSONURL.path,
             "--preset", "balanced",
         ]
+        if let asrModelURL = firstExistingModel(named: "whisper-tiny") {
+            arguments.append(contentsOf: ["--asr-model", asrModelURL.path])
+        }
         if diarize { arguments.append("--diarize") }
+        if diarize, let diarizationModelURL = firstExistingModel(named: "speaker-diarization-3.1") {
+            arguments.append(contentsOf: ["--diarization-model", diarizationModelURL.path])
+        }
         if !cleanFillers { arguments.append("--keep-fillers") }
 
         let bundledPython = configuration.pythonExecutableURL
@@ -42,6 +48,7 @@ public struct WorkerCommandBuilder {
 
         var environment: [String: String] = [
             "PODCAST_MODELS_DIR": configuration.modelsDirectory.path,
+            "PODCAST_BUNDLED_MODELS_DIR": configuration.bundledModelsDirectory.path,
             "PODCAST_SCRIPTS_DIR": configuration.scriptsDirectory.path,
         ]
         if executable == bundledPython.path {
@@ -57,5 +64,13 @@ public struct WorkerCommandBuilder {
             outputTextURL: outputTextURL,
             outputJSONURL: outputJSONURL
         )
+    }
+
+    private func firstExistingModel(named name: String) -> URL? {
+        let candidates = [
+            configuration.modelsDirectory.appendingPathComponent(name, isDirectory: true),
+            configuration.bundledModelsDirectory.appendingPathComponent(name, isDirectory: true),
+        ]
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 }

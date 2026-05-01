@@ -6,6 +6,8 @@ CONFIGURATION="${CONFIGURATION:-release}"
 APP_NAME="Podcast Transcript Studio"
 EXECUTABLE_NAME="PodcastTranscriptStudioApp"
 RESOURCE_BUNDLE_NAME="PodcastTranscriptStudio_PodcastTranscriptStudioCore.bundle"
+APP_ICON_NAME="AppIcon"
+APP_ICON_SRC="${APP_ICON_SRC:-${ROOT_DIR}/assets/${APP_ICON_NAME}.icns}"
 BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-ai.openclaw.PodcastTranscriptStudio}"
 APP_VERSION="${APP_VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
@@ -15,7 +17,7 @@ CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-VERIFY_PYTHON_IMPORTS="${VERIFY_PYTHON_IMPORTS:-torch torchaudio transformers pyannote.audio faster_whisper}"
+VERIFY_PYTHON_IMPORTS="${VERIFY_PYTHON_IMPORTS:-torch torchaudio transformers pyannote.audio faster_whisper huggingface_hub}"
 
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   echo "missing python executable: $PYTHON_BIN" >&2
@@ -98,6 +100,12 @@ if [ ! -d "$RESOURCE_BUNDLE_PATH" ]; then
   exit 1
 fi
 
+if [ ! -f "$APP_ICON_SRC" ]; then
+  echo "missing app icon: $APP_ICON_SRC" >&2
+  echo "run scripts/generate_app_icon.py to create it" >&2
+  exit 1
+fi
+
 if [ ! -d "$PYTHON_HOME_SRC" ]; then
   echo "missing python runtime source: $PYTHON_HOME_SRC" >&2
   exit 1
@@ -119,6 +127,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$EXECUTABLE_PATH" "$MACOS_DIR/$EXECUTABLE_NAME"
 chmod +x "$MACOS_DIR/$EXECUTABLE_NAME"
 cp -R "$RESOURCE_BUNDLE_PATH" "$RESOURCES_DIR/$RESOURCE_BUNDLE_NAME"
+cp "$APP_ICON_SRC" "$RESOURCES_DIR/${APP_ICON_NAME}.icns"
 
 BUNDLED_RESOURCE_ROOT="${RESOURCES_DIR}/${RESOURCE_BUNDLE_NAME}/Resources"
 RUNTIME_DIR="${BUNDLED_RESOURCE_ROOT}/Runtime"
@@ -147,6 +156,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
   <string>${BUNDLE_IDENTIFIER}</string>
+  <key>CFBundleIconFile</key>
+  <string>${APP_ICON_NAME}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

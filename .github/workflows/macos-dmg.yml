@@ -94,7 +94,7 @@ jobs:
       - name: Build DMG
         env:
           PYTHON_BIN: python
-          VERIFY_PYTHON_IMPORTS: torch torchaudio transformers pyannote.audio faster_whisper
+          VERIFY_PYTHON_IMPORTS: torch torchaudio transformers pyannote.audio faster_whisper huggingface_hub
         run: ./scripts/build_macos_dmg.sh
 
       - name: Upload workflow artifact

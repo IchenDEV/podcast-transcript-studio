@@ -7,12 +7,7 @@ public struct PackagingPlan: Equatable, Sendable {
 
     public static let `default` = PackagingPlan(
         defaultASRModel: "openai/whisper-tiny",
-        requiredModelRepositories: [
-            "openai/whisper-tiny",
-            "pyannote/speaker-diarization-3.1",
-            "pyannote/segmentation-3.0",
-            "pyannote/wespeaker-voxceleb-resnet34-LM",
-        ],
+        requiredModelRepositories: ModelAssets.required.map(\.repository),
         requiredScriptFiles: [
             "transcribe_with_speaker_segmentation.py"
         ]

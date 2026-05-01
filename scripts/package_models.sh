@@ -48,6 +48,30 @@ copy_latest_snapshot "pyannote/speaker-diarization-3.1" "config.yaml" || missing
 copy_latest_snapshot "pyannote/segmentation-3.0" "config.yaml" "pytorch_model.bin" || missing=1
 copy_latest_snapshot "pyannote/wespeaker-voxceleb-resnet34-LM" "config.yaml" "pytorch_model.bin" || missing=1
 
+patch_diarization_config() {
+  python3 - "$MODELS_OUT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+models_dir = Path(sys.argv[1]).resolve()
+config_path = models_dir / "speaker-diarization-3.1" / "config.yaml"
+if not config_path.exists():
+    raise SystemExit(0)
+
+text = config_path.read_text(encoding="utf-8")
+text = text.replace(
+    "embedding: pyannote/wespeaker-voxceleb-resnet34-LM",
+    f"embedding: {json.dumps(str(models_dir / 'wespeaker-voxceleb-resnet34-LM'))}",
+)
+text = text.replace(
+    "segmentation: pyannote/segmentation-3.0",
+    f"segmentation: {json.dumps(str(models_dir / 'segmentation-3.0'))}",
+)
+config_path.write_text(text, encoding="utf-8")
+PY
+}
+
 cp "$WORKER_SRC/cli.py" "$SCRIPTS_OUT/cli.py"
 cp "$WORKER_SRC/transcribe_with_speaker_segmentation.py" "$SCRIPTS_OUT/transcribe_with_speaker_segmentation.py"
 echo "copied worker scripts"
@@ -56,3 +80,6 @@ if [ "$missing" -ne 0 ]; then
   echo "some model snapshots are missing or incomplete" >&2
   exit 1
 fi
+
+patch_diarization_config
+echo "patched local model references"

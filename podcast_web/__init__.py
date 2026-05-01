@@ -1,3 +1,3 @@
-from podcast_web.app import app, create_app
+from podcast_web.app import create_app
 
-__all__ = ["app", "create_app"]
+__all__ = ["create_app"]

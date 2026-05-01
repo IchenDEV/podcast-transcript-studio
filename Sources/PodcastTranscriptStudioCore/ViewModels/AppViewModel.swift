@@ -4,11 +4,12 @@ import Foundation
 public final class AppViewModel: ObservableObject {
     @Published public private(set) var selectedJobID: UUID?
     @Published public private(set) var isRunningJob = false
+    @Published public private(set) var configuration: AppConfiguration
+    @Published public private(set) var modelDownloadState = ModelDownloadState()
     public let jobStore: JobStore
-    public let configuration: AppConfiguration
-    private let exporter: TranscriptExporter
-    private let coordinator: TranscriptionCoordinator
-    private let repository: JobStoreRepository
+    private var exporter: TranscriptExporter
+    private var coordinator: TranscriptionCoordinator
+    private var repository: JobStoreRepository
 
     public init(
         jobStore: JobStore = JobStore(),
@@ -42,6 +43,10 @@ public final class AppViewModel: ObservableObject {
         selectedJob?.speakerDisplayNames[speaker] ?? speaker
     }
 
+    public var modelAssetStatuses: [ModelAssetStatus] {
+        ModelDownloadManager(configuration: configuration).statuses()
+    }
+
     public func exportSelectedJob(as format: ExportFormat) throws -> URL {
         guard let job = selectedJob else {
             throw AppViewModelError.noSelectedJob
@@ -54,6 +59,21 @@ public final class AppViewModel: ObservableObject {
         isRunningJob = true
         defer { isRunningJob = false }
         do {
+            let job = try await coordinator.startTranscription(sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
+            selectedJobID = job.id
+            try persistJobs()
+        } catch {
+            try? persistJobs()
+            throw error
+        }
+    }
+
+    public func startTranscription(podcastURL: URL, diarize: Bool = true, cleanFillers: Bool = true) async throws {
+        isRunningJob = true
+        defer { isRunningJob = false }
+        do {
+            let importer = PodcastAudioImporter(configuration: configuration)
+            let sourceURL = try await importer.importAudio(from: podcastURL)
             let job = try await coordinator.startTranscription(sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
             selectedJobID = job.id
             try persistJobs()
@@ -82,8 +102,41 @@ public final class AppViewModel: ObservableObject {
         try? persistJobs()
     }
 
+    public func updateConfiguration(overrides: AppConfigurationOverrides) throws {
+        try AppConfigurationStore.save(overrides)
+        let updated = AppConfiguration.live(baseDirectory: configuration.baseDirectory, bundle: .module)
+        try applyConfiguration(updated)
+    }
+
+    public func resetConfiguration() throws {
+        AppConfigurationStore.reset()
+        let updated = AppConfiguration.live(baseDirectory: configuration.baseDirectory, bundle: .module)
+        try applyConfiguration(updated)
+    }
+
+    public func downloadModels(huggingFaceToken: String?) async {
+        guard !modelDownloadState.isRunning else { return }
+        modelDownloadState = ModelDownloadState(phase: .running, message: "正在下载模型")
+        do {
+            let output = try await ModelDownloadManager(configuration: configuration).downloadAll(huggingFaceToken: huggingFaceToken)
+            modelDownloadState = ModelDownloadState(phase: .succeeded, message: output)
+        } catch {
+            modelDownloadState = ModelDownloadState(phase: .failed, message: error.localizedDescription)
+        }
+    }
+
     private func persistJobs() throws {
         try repository.save(jobs: jobStore.jobs)
+    }
+
+    private func applyConfiguration(_ configuration: AppConfiguration) throws {
+        self.configuration = configuration
+        self.exporter = TranscriptExporter(configuration: configuration)
+        self.repository = JobStoreRepository(configuration: configuration)
+        self.coordinator = TranscriptionCoordinator(configuration: configuration, jobStore: jobStore)
+        try FileManager.default.createDirectory(at: configuration.jobsDirectory, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(at: configuration.exportsDirectory, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(at: configuration.logsDirectory, withIntermediateDirectories: true, attributes: nil)
     }
 }
 

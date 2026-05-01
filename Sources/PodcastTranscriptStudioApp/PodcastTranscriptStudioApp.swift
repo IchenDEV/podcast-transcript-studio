@@ -14,7 +14,7 @@ struct PodcastTranscriptStudioApp: App {
 
     var body: some Scene {
         WindowGroup("Podcast Transcript Studio") {
-            ContentView(viewModel: viewModel, configuration: configuration)
+            ContentView(viewModel: viewModel)
                 .frame(minWidth: 1100, minHeight: 720)
         }
         .defaultSize(width: 1280, height: 820)
