@@ -13,28 +13,15 @@ struct NeutralGlassBackground<S: InsettableShape>: ViewModifier {
             .background {
                 shape.fill(material)
                 shape.fill(neutralOverlay)
-                shape.fill(neutralHighlight)
             }
             .overlay(
-                shape.strokeBorder(.white.opacity(colorScheme == .dark ? strokeOpacity * 0.45 : strokeOpacity))
+                shape.strokeBorder(.separator.opacity(colorScheme == .dark ? strokeOpacity * 0.65 : strokeOpacity * 0.75))
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? shadowOpacity * 1.8 : shadowOpacity), radius: 20, y: 10)
+            .shadow(color: .black.opacity(colorScheme == .dark ? shadowOpacity * 1.1 : shadowOpacity * 0.45), radius: 10, y: 4)
     }
 
     private var neutralOverlay: Color {
-        colorScheme == .dark ? Color.black.opacity(0.18) : Color.white.opacity(0.24)
-    }
-
-    private var neutralHighlight: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(colorScheme == .dark ? 0.035 : 0.20),
-                Color.white.opacity(0.0),
-                Color.black.opacity(colorScheme == .dark ? 0.10 : 0.025),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.16)
     }
 }
 
@@ -68,24 +55,19 @@ struct GlassToolbarButtonStyle: ButtonStyle {
             .lineLimit(1)
             .foregroundStyle(.primary)
             .padding(.horizontal, prominent ? 14 : 12)
-            .frame(height: 38)
+            .frame(height: 34)
             .frame(maxWidth: .infinity)
             .background {
-                Capsule()
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.ultraThinMaterial)
-                Capsule()
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(buttonTint(isPressed: configuration.isPressed))
             }
             .overlay(alignment: .topLeading) {
-                Capsule()
-                    .stroke(.white.opacity(colorScheme == .dark ? 0.16 : 0.58), lineWidth: 1)
-                    .blur(radius: 0.2)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(.separator.opacity(colorScheme == .dark ? 0.28 : 0.22), lineWidth: 1)
             }
-            .overlay(
-                Capsule()
-                    .strokeBorder(.separator.opacity(colorScheme == .dark ? 0.25 : 0.18))
-            )
-            .shadow(color: .black.opacity(prominent ? (colorScheme == .dark ? 0.26 : 0.10) : 0.055), radius: prominent ? 12 : 8, y: 5)
+            .shadow(color: .black.opacity(prominent ? (colorScheme == .dark ? 0.14 : 0.04) : 0.02), radius: prominent ? 8 : 4, y: 3)
             .opacity(isEnabled ? 1 : 0.45)
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
             .animation(.smooth(duration: 0.16), value: configuration.isPressed)
@@ -93,9 +75,9 @@ struct GlassToolbarButtonStyle: ButtonStyle {
 
     private func buttonTint(isPressed: Bool) -> Color {
         if prominent {
-            return Color.primary.opacity(isPressed ? (colorScheme == .dark ? 0.20 : 0.13) : (colorScheme == .dark ? 0.15 : 0.09))
+            return Color.primary.opacity(isPressed ? (colorScheme == .dark ? 0.16 : 0.10) : (colorScheme == .dark ? 0.12 : 0.07))
         }
-        return Color.white.opacity(isPressed ? (colorScheme == .dark ? 0.12 : 0.34) : (colorScheme == .dark ? 0.07 : 0.22))
+        return Color.white.opacity(isPressed ? (colorScheme == .dark ? 0.10 : 0.24) : (colorScheme == .dark ? 0.05 : 0.14))
     }
 }
 

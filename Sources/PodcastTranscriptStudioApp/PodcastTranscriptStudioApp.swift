@@ -5,6 +5,7 @@ import PodcastTranscriptStudioCore
 struct PodcastTranscriptStudioApp: App {
     private let configuration: AppConfiguration
     @StateObject private var viewModel: AppViewModel
+    @AppStorage(AppIconPreference.storageKey) private var appIconPreferenceRawValue = AppIconPreference.system.rawValue
 
     init() {
         let configuration = AppConfiguration.live(baseDirectory: URL(fileURLWithPath: NSHomeDirectory()))
@@ -16,6 +17,12 @@ struct PodcastTranscriptStudioApp: App {
         WindowGroup("Podcast Transcript Studio") {
             ContentView(viewModel: viewModel)
                 .frame(minWidth: 1100, minHeight: 720)
+                .modifier(
+                    AppIconApplier(
+                        preferenceRawValue: appIconPreferenceRawValue,
+                        configuration: viewModel.configuration
+                    )
+                )
         }
         .defaultSize(width: 1280, height: 820)
     }

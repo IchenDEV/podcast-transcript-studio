@@ -66,6 +66,97 @@ public struct AppConfiguration: Equatable, Sendable {
     public var pythonSitePackagesURL: URL {
         runtimeDirectory.appendingPathComponent("site-packages", isDirectory: true)
     }
+
+    public func resolvedPythonRuntime(fileManager: FileManager = .default) -> PythonRuntimeConfiguration? {
+        if fileManager.fileExists(atPath: pythonExecutableURL.path) {
+            return PythonRuntimeConfiguration(
+                executableURL: pythonExecutableURL,
+                pythonHomeURL: pythonHomeURL,
+                pythonPathURL: pythonSitePackagesURL
+            )
+        }
+
+        if let developmentPythonURL = developmentWorkerPythonURL(fileManager: fileManager) {
+            return PythonRuntimeConfiguration(
+                executableURL: developmentPythonURL,
+                pythonHomeURL: nil,
+                pythonPathURL: nil
+            )
+        }
+
+        return nil
+    }
+
+    private func developmentWorkerPythonURL(fileManager: FileManager) -> URL? {
+        for root in developmentProjectRoots(fileManager: fileManager) {
+            for relativePath in [".worker-venv/bin/python", ".worker-venv/bin/python3"] {
+                let url = root.appendingPathComponent(relativePath)
+                if fileManager.fileExists(atPath: url.path) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+
+    private func developmentProjectRoots(fileManager: FileManager) -> [URL] {
+        var roots: [URL] = []
+        let starts = [
+            bundledResourcesDirectory,
+            baseDirectory,
+        ]
+
+        for start in starts {
+            roots.append(contentsOf: projectRoots(startingAt: start, fileManager: fileManager))
+        }
+
+        var seen = Set<String>()
+        return roots.filter { root in
+            let key = root.standardizedFileURL.path
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+
+    private func projectRoots(startingAt start: URL, fileManager: FileManager) -> [URL] {
+        var roots: [URL] = []
+        var current = start.standardizedFileURL
+        if !current.hasDirectoryPath {
+            current.deleteLastPathComponent()
+        }
+
+        while true {
+            if fileManager.fileExists(atPath: current.appendingPathComponent("Package.swift").path) {
+                roots.append(current)
+            }
+
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path {
+                break
+            }
+            current = parent
+        }
+
+        return roots
+    }
+}
+
+public struct PythonRuntimeConfiguration: Equatable, Sendable {
+    public let executableURL: URL
+    public let pythonHomeURL: URL?
+    public let pythonPathURL: URL?
+
+    public var environment: [String: String] {
+        var values = ["PYTHONNOUSERSITE": "1"]
+        if let pythonHomeURL {
+            values["PYTHONHOME"] = pythonHomeURL.path
+        }
+        if let pythonPathURL {
+            values["PYTHONPATH"] = pythonPathURL.path
+        }
+        return values
+    }
 }
 
 public struct AppConfigurationOverrides: Codable, Equatable, Sendable {

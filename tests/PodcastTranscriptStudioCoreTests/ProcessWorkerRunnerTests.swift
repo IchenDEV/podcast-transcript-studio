@@ -45,4 +45,14 @@ final class ProcessWorkerRunnerTests: XCTestCase {
             XCTFail("unexpected error: \(error)")
         }
     }
+
+    func test_non_zero_exit_description_includes_stderr() {
+        let error = ProcessWorkerRunnerError.nonZeroExit(
+            code: 1,
+            stderr: "ModuleNotFoundError: No module named 'transformers'"
+        )
+
+        XCTAssertTrue(error.localizedDescription.contains("退出码 1"))
+        XCTAssertTrue(error.localizedDescription.contains("transformers"))
+    }
 }

@@ -1,6 +1,12 @@
 import SwiftUI
 import PodcastTranscriptStudioCore
 
+enum SidebarColumnWidth {
+    static let minimum: CGFloat = 280
+    static let ideal: CGFloat = 292
+    static let maximum: CGFloat = 340
+}
+
 struct SidebarView: View {
     @ObservedObject var viewModel: AppViewModel
     @Binding var selectedPanel: DetailPanel
@@ -8,16 +14,15 @@ struct SidebarView: View {
     @Binding var cleanFillers: Bool
     let onImportAudio: () -> Void
     let onImportPodcast: () -> Void
-    let onExport: (ExportFormat) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
             sidebarHeader
-            actionPanel
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+            actionList
+                .padding(.horizontal, 14)
+                .padding(.bottom, 16)
 
             jobList
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -26,10 +31,15 @@ struct SidebarView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 14)
         }
-        .background(.thinMaterial)
+        .frame(
+            minWidth: SidebarColumnWidth.minimum,
+            idealWidth: SidebarColumnWidth.ideal,
+            maxWidth: SidebarColumnWidth.maximum
+        )
+        .background(.bar)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(.separator.opacity(colorScheme == .dark ? 0.30 : 0.45))
+                .fill(.separator.opacity(colorScheme == .dark ? 0.28 : 0.36))
                 .frame(width: 1)
         }
     }
@@ -53,82 +63,49 @@ struct SidebarView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 18)
+        .padding(.top, 22)
+        .padding(.bottom, 18)
     }
 
-    private var actionPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 8) {
-                Button {
-                    selectedPanel = .result
-                    onImportAudio()
-                } label: {
-                    Label("导入音频", systemImage: "plus")
-                }
-                .buttonStyle(GlassToolbarButtonStyle(prominent: true))
+    private var actionList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("操作")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
 
-                Button {
-                    selectedPanel = .result
-                    onImportPodcast()
-                } label: {
-                    Label("播客链接", systemImage: "link.badge.plus")
-                }
-                .buttonStyle(GlassToolbarButtonStyle(prominent: false))
+            Button {
+                selectedPanel = .result
+                onImportAudio()
+            } label: {
+                SidebarActionRow(title: "导入音频", icon: "doc.badge.plus")
             }
+            .buttonStyle(.plain)
 
-            HStack(spacing: 8) {
-                Text("选项")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-
-                Toggle(isOn: $diarize) {
-                    Image(systemName: "person.2.wave.2")
-                }
-                .toggleStyle(GlassIconToggleStyle())
-                .help("多说话人")
-                .accessibilityLabel("多说话人")
-
-                Toggle(isOn: $cleanFillers) {
-                    Image(systemName: "wand.and.stars")
-                }
-                .toggleStyle(GlassIconToggleStyle())
-                .help("清理语气词")
-                .accessibilityLabel("清理语气词")
-
-                exportMenu
+            Button {
+                selectedPanel = .result
+                onImportPodcast()
+            } label: {
+                SidebarActionRow(title: "播客链接", icon: "link.badge.plus")
             }
+            .buttonStyle(.plain)
+
+            Button {
+                diarize.toggle()
+            } label: {
+                SidebarActionRow(title: "说话人工具", icon: "person.2", isOn: diarize)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                cleanFillers.toggle()
+            } label: {
+                SidebarActionRow(title: "清理文本", icon: "wand.and.sparkles", isOn: cleanFillers)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(10)
-        .neutralGlass(
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous),
-            material: .thinMaterial,
-            strokeOpacity: 0.38,
-            shadowOpacity: 0.06
-        )
-    }
-
-    private var exportMenu: some View {
-        Menu {
-            Button("导出 TXT") {
-                onExport(.txt)
-            }
-            Button("导出 JSON") {
-                onExport(.json)
-            }
-            Button("导出 SRT") {
-                onExport(.srt)
-            }
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-        }
-        .menuStyle(.button)
-        .buttonStyle(GlassIconButtonStyle(isSelected: false))
-        .help("导出结果")
-        .disabled(viewModel.selectedJob == nil || viewModel.isRunningJob)
     }
 
     private var jobList: some View {
@@ -137,11 +114,12 @@ struct SidebarView: View {
                 if viewModel.jobStore.jobs.isEmpty {
                     emptyState
                 } else {
-                    Text("稿件")
-                        .font(.caption.weight(.semibold))
+                    Text("任务列表")
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 8)
                         .padding(.top, 2)
+                        .padding(.bottom, 4)
 
                     ForEach(viewModel.jobStore.jobs) { job in
                         Button {
@@ -154,7 +132,7 @@ struct SidebarView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.bottom, 16)
         }
     }
@@ -195,28 +173,66 @@ struct SidebarView: View {
     }
 }
 
+private struct SidebarActionRow: View {
+    let title: String
+    let icon: String
+    var isOn: Bool? = nil
+
+    var body: some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor)
+                .frame(width: 22)
+            Text(title)
+                .font(.callout)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 8)
+        .frame(height: 36)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityLabel(accessibilityTitle)
+    }
+
+    private var iconColor: Color {
+        if isOn == true {
+            return .blue
+        }
+        return .secondary
+    }
+
+    private var accessibilityTitle: String {
+        if let isOn {
+            return "\(title)，\(isOn ? "已开启" : "已关闭")"
+        }
+        return title
+    }
+}
+
 private struct JobRow: View {
     let job: TranscriptionJob
     let isSelected: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(statusColor.opacity(colorScheme == .dark ? 0.22 : 0.14))
+                Circle()
+                    .fill(statusColor.opacity(colorScheme == .dark ? 0.18 : 0.10))
                 Image(systemName: statusIcon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(statusColor)
                     .symbolRenderingMode(.hierarchical)
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 30, height: 30)
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.35))
+                Circle()
+                    .strokeBorder(statusColor.opacity(colorScheme == .dark ? 0.28 : 0.32))
             )
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(job.filename)
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
@@ -232,7 +248,7 @@ private struct JobRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -241,7 +257,7 @@ private struct JobRow: View {
 
     private var selectionBackground: Color {
         if isSelected {
-            return Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.10)
+            return Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.08)
         }
         return Color.clear
     }

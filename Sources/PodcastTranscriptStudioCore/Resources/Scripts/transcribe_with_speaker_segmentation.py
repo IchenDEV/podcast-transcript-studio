@@ -13,14 +13,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import numpy as np
 from transformers import pipeline
 
 
@@ -129,6 +132,14 @@ def ensure_wav16k_mono(src: Path, out: Path) -> Path:
     ]
     run(cmd)
     return out
+
+
+def temp_wav_path(audio: Path) -> Path:
+    stat = audio.stat()
+    identity = f"{audio.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", audio.stem).strip("._")[:80] or "audio"
+    return Path("/tmp") / f"{stem}_{digest}_16k.wav"
 
 
 def normalize_text(t: str) -> str:
@@ -309,6 +320,7 @@ def build_asr_pipeline(model: str, lang: str, device: str = "cpu", chunk_s: int 
     gen_kwargs = {"task": "transcribe"}
     if lang and lang.lower() != "auto":
         gen_kwargs["language"] = lang
+    disable_transformers_torchcodec_probe()
     return pipeline(
         "automatic-speech-recognition",
         model=model,
@@ -321,6 +333,15 @@ def build_asr_pipeline(model: str, lang: str, device: str = "cpu", chunk_s: int 
     )
 
 
+def disable_transformers_torchcodec_probe() -> None:
+    try:
+        from transformers.pipelines import automatic_speech_recognition
+
+        automatic_speech_recognition.is_torchcodec_available = lambda: False
+    except Exception:
+        pass
+
+
 def transcribe_audio(asr_engine, wav: Path, backend: str, lang: str, chunk_s: int, batch_size: int, beam: int = 5, vad: bool = False):
     if backend == "faster-whisper":
         return asr_engine.transcribe(
@@ -330,11 +351,50 @@ def transcribe_audio(asr_engine, wav: Path, backend: str, lang: str, chunk_s: in
             vad_filter=vad,
             word_timestamps=True,
         )[0]
-    return asr_engine(str(wav), batch_size=batch_size, chunk_length_s=chunk_s)
+    return asr_engine(_load_wav_for_transformers(wav), batch_size=batch_size, chunk_length_s=chunk_s)
+
+
+def _load_wav_for_transformers(wav: Path) -> dict:
+    audio, sample_rate = _read_wav_float32(wav)
+    return {"array": audio, "sampling_rate": sample_rate}
+
+
+def _load_wav_for_pyannote(wav: Path) -> dict:
+    import torch
+
+    audio, sample_rate = _read_wav_float32(wav)
+    return {
+        "waveform": torch.from_numpy(audio).unsqueeze(0),
+        "sample_rate": sample_rate,
+    }
+
+
+def _read_wav_float32(wav: Path) -> Tuple[np.ndarray, int]:
+    with wave.open(str(wav), "rb") as reader:
+        channels = reader.getnchannels()
+        sample_width = reader.getsampwidth()
+        sample_rate = reader.getframerate()
+        frames = reader.readframes(reader.getnframes())
+
+    if sample_width == 1:
+        audio = np.frombuffer(frames, dtype=np.uint8).astype(np.float32)
+        audio = (audio - 128.0) / 128.0
+    elif sample_width == 2:
+        audio = np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+    elif sample_width == 4:
+        audio = np.frombuffer(frames, dtype="<i4").astype(np.float32) / 2147483648.0
+    else:
+        raise ValueError(f"不支持的 WAV 位宽: {sample_width * 8}")
+
+    if channels > 1:
+        audio = audio.reshape(-1, channels).mean(axis=1)
+
+    return audio.astype(np.float32, copy=False), sample_rate
 
 
 def build_diarization_pipeline(token: Optional[str] = None, model: Optional[str] = None):
     try:
+        import inspect
         import torch
         from pyannote.audio import Pipeline
         from pyannote.audio.core.task import Specifications, Problem, Resolution
@@ -352,7 +412,14 @@ def build_diarization_pipeline(token: Optional[str] = None, model: Optional[str]
 
         auth = token or os.environ.get("HF_TOKEN")
         model_name = model or "pyannote/speaker-diarization-3.1"
-        pipe = Pipeline.from_pretrained(model_name, use_auth_token=auth)
+        kwargs = {}
+        params = inspect.signature(Pipeline.from_pretrained).parameters
+        if auth:
+            if "token" in params:
+                kwargs["token"] = auth
+            elif "use_auth_token" in params:
+                kwargs["use_auth_token"] = auth
+        pipe = Pipeline.from_pretrained(model_name, **kwargs)
         return pipe
     except Exception as e:
         print(f"[warn] 发言人分离未启用：{type(e).__name__}: {e}")
@@ -363,7 +430,7 @@ def infer_speakers(audio_wav: Path, diarization_pipe):
     if diarization_pipe is None:
         return []
     spans = []
-    diar = diarization_pipe(str(audio_wav))
+    diar = diarization_pipe(_load_wav_for_pyannote(audio_wav))
     for seg, _, spk in diar.itertracks(yield_label=True):
         spans.append((float(seg.start), float(seg.end), str(spk)))
     return spans
@@ -567,7 +634,7 @@ def main() -> None:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-    wav = ensure_wav16k_mono(audio, Path("/tmp") / f"{audio.stem}_16k.wav")
+    wav = ensure_wav16k_mono(audio, temp_wav_path(audio))
 
     asr, final_engine = build_asr_with_fallback(
         model=args.asr_model,
@@ -601,7 +668,11 @@ def main() -> None:
     speaker_spans = []
     if args.diarize:
         diarization_pipe = build_diarization_pipeline(args.hf_token, args.diarization_model)
-        speaker_spans = infer_speakers(wav, diarization_pipe) if diarization_pipe is not None else []
+        try:
+            speaker_spans = infer_speakers(wav, diarization_pipe) if diarization_pipe is not None else []
+        except Exception as e:
+            print(f"[warn] 发言人分离执行失败：{type(e).__name__}: {e}")
+            speaker_spans = []
     apply_speakers(asr_chunks, speaker_spans)
 
     export_text(asr_chunks, args.section_seconds, out_txt)

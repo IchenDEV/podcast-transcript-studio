@@ -4,8 +4,21 @@ public protocol WorkerRunning: Sendable {
     func run(command: WorkerCommand) async throws
 }
 
-public enum ProcessWorkerRunnerError: Error {
+public enum ProcessWorkerRunnerError: LocalizedError {
     case nonZeroExit(code: Int32, stderr: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .nonZeroExit(code, stderr):
+            let message = stderr
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            guard !message.isEmpty else {
+                return "转写 worker 退出码 \(code)。"
+            }
+            return "转写 worker 退出码 \(code)：\n\(String(message.suffix(1600)))"
+        }
+    }
 }
 
 public struct ProcessWorkerRunner: WorkerRunning {

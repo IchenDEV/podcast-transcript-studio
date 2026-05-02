@@ -74,8 +74,8 @@ public struct ModelDownloadManager: Sendable {
                 attributes: nil
             )
 
-            let bundledPython = configuration.pythonExecutableURL
-            let executable = FileManager.default.fileExists(atPath: bundledPython.path) ? bundledPython.path : "/usr/bin/python3"
+            let pythonRuntime = configuration.resolvedPythonRuntime()
+            let executable = pythonRuntime?.executableURL.path ?? "/usr/bin/python3"
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = [
@@ -85,10 +85,10 @@ public struct ModelDownloadManager: Sendable {
             ]
 
             var environment = ProcessInfo.processInfo.environment
-            if executable == bundledPython.path {
-                environment["PYTHONHOME"] = configuration.pythonHomeURL.path
-                environment["PYTHONPATH"] = configuration.pythonSitePackagesURL.path
-                environment["PYTHONNOUSERSITE"] = "1"
+            if let pythonRuntime {
+                for (key, value) in pythonRuntime.environment {
+                    environment[key] = value
+                }
             }
             let token = huggingFaceToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !token.isEmpty {

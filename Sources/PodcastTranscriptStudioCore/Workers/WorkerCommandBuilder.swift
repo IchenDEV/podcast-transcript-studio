@@ -43,18 +43,18 @@ public struct WorkerCommandBuilder {
         }
         if !cleanFillers { arguments.append("--keep-fillers") }
 
-        let bundledPython = configuration.pythonExecutableURL
-        let executable = FileManager.default.fileExists(atPath: bundledPython.path) ? bundledPython.path : "/usr/bin/python3"
+        let pythonRuntime = configuration.resolvedPythonRuntime()
+        let executable = pythonRuntime?.executableURL.path ?? "/usr/bin/python3"
 
         var environment: [String: String] = [
             "PODCAST_MODELS_DIR": configuration.modelsDirectory.path,
             "PODCAST_BUNDLED_MODELS_DIR": configuration.bundledModelsDirectory.path,
             "PODCAST_SCRIPTS_DIR": configuration.scriptsDirectory.path,
         ]
-        if executable == bundledPython.path {
-            environment["PYTHONHOME"] = configuration.pythonHomeURL.path
-            environment["PYTHONPATH"] = configuration.pythonSitePackagesURL.path
-            environment["PYTHONNOUSERSITE"] = "1"
+        if let pythonRuntime {
+            for (key, value) in pythonRuntime.environment {
+                environment[key] = value
+            }
         }
 
         return WorkerCommand(

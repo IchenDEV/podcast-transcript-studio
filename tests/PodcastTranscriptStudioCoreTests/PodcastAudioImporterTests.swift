@@ -52,6 +52,29 @@ final class PodcastAudioImporterTests: XCTestCase {
         XCTAssertEqual(resolved.audioURL.absoluteString, "https://audio.example.com/parker.m4a")
     }
 
+    func test_resolves_apple_podcast_when_page_contains_audio_url() async throws {
+        let sourceURL = "https://podcasts.apple.com/cn/podcast/%E5%A3%B0%E5%8A%A8%E6%97%A9%E5%92%96%E5%95%A1/id1573189055?i=1000764203947"
+        let pages = [
+            sourceURL: Data("""
+            <html>
+              <head>
+                <meta property="og:title" content="大厂纷纷立项对标大疆 Pocket" />
+              </head>
+              <body>
+                <script>window.audio = "https:\\/\\/jt.ximalaya.com\\/audio\\/episode.m4a?channel=rss"</script>
+              </body>
+            </html>
+            """.utf8)
+        ]
+        let importer = makeImporter(pages: pages)
+
+        let resolved = try await importer.resolveAudioURL(from: URL(string: sourceURL)!)
+
+        XCTAssertEqual(resolved.platform, "apple_podcasts")
+        XCTAssertEqual(resolved.title, "大厂纷纷立项对标大疆 Pocket")
+        XCTAssertEqual(resolved.audioURL.absoluteString, "https://jt.ximalaya.com/audio/episode.m4a?channel=rss")
+    }
+
     func test_resolves_ximalaya_from_public_play_api() async throws {
         let pages = [
             "https://www.ximalaya.com/sound/123456": Data("<html><title>Demo</title></html>".utf8),

@@ -3,6 +3,7 @@ import PodcastTranscriptStudioCore
 
 struct JobDetailView: View {
     @ObservedObject var viewModel: AppViewModel
+    let displayMode: TranscriptDisplayMode
     @Environment(\.colorScheme) private var colorScheme
     @State private var speakerDrafts: [String: String] = [:]
 
@@ -14,17 +15,22 @@ struct JobDetailView: View {
                         jobHeader(job)
 
                         if !job.transcriptSections.isEmpty {
-                            speakerEditor(job: job)
-                            ForEach(job.transcriptSections) { section in
-                                transcriptSection(section)
+                            if displayMode == .detail {
+                                speakerEditor(job: job)
+                                ForEach(job.transcriptSections) { section in
+                                    transcriptSection(section)
+                                }
+                            } else {
+                                rawTranscript(job: job)
                             }
                         } else {
                             emptyTranscript(job: job)
                         }
                     }
-                    .frame(maxWidth: 980, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
+                    .padding(.top, 34)
+                    .padding(.bottom, 96)
                 }
                 .scrollContentBackground(.hidden)
             } else {
@@ -49,21 +55,14 @@ struct JobDetailView: View {
     }
 
     private func jobHeader(_ job: TranscriptionJob) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(statusColor(job.status).opacity(0.14))
-                    Image(systemName: statusIcon(job.status))
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(statusColor(job.status))
-                }
-                .frame(width: 56, height: 56)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .center, spacing: 14) {
+                statusMark(job.status)
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         Text(job.filename)
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 25, weight: .semibold))
                             .lineLimit(1)
                         statusPill(job.status)
                     }
@@ -82,6 +81,8 @@ struct JobDetailView: View {
                 metric(title: "说话人", value: "\(speakerCount(job))", icon: "person.2")
             }
 
+            Divider()
+
             if let errorMessage = job.errorMessage {
                 messageRow(icon: "exclamationmark.triangle", title: "转写失败", value: errorMessage, color: .red)
             }
@@ -91,8 +92,19 @@ struct JobDetailView: View {
                     .textSelection(.enabled)
             }
         }
-        .padding(20)
-        .neutralGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous), strokeOpacity: 0.48, shadowOpacity: 0.09)
+    }
+
+    private func statusMark(_ status: JobStatus) -> some View {
+        ZStack {
+            Circle()
+                .fill(statusColor(status).opacity(colorScheme == .dark ? 0.16 : 0.08))
+            Circle()
+                .strokeBorder(statusColor(status).opacity(0.55), lineWidth: 1.5)
+            Image(systemName: statusIcon(status))
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(statusColor(status))
+        }
+        .frame(width: 44, height: 44)
     }
 
     private func metric(title: String, value: String, icon: String) -> some View {
@@ -111,8 +123,13 @@ struct JobDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .neutralGlass(in: RoundedRectangle(cornerRadius: 13, style: .continuous), material: .thinMaterial, strokeOpacity: 0.34, shadowOpacity: 0.02)
+        .padding(.horizontal, 14)
+        .frame(height: 56)
+        .background(metricFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(.separator.opacity(colorScheme == .dark ? 0.30 : 0.22))
+        )
     }
 
     private func messageRow(icon: String, title: String, value: String, color: Color) -> some View {
@@ -138,22 +155,26 @@ struct JobDetailView: View {
     private func speakerEditor(job: TranscriptionJob) -> some View {
         let speakers = Array(Set(job.transcriptSections.flatMap { $0.segments.map(\.speaker) })).sorted()
         if !speakers.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Label("说话人名称", systemImage: "person.text.rectangle")
-                        .font(.headline)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    Label("说话人", systemImage: "person.text.rectangle")
+                        .font(.callout.weight(.semibold))
                     Spacer()
                     Text("\(speakers.count) 位")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider()
 
                 ForEach(speakers, id: \.self) { speaker in
                     HStack(spacing: 12) {
                         speakerMark(speaker)
 
                         Text(speaker)
-                            .font(.callout.weight(.medium))
+                            .font(.subheadline.weight(.medium))
                             .frame(width: 82, alignment: .leading)
 
                         TextField(
@@ -166,15 +187,13 @@ struct JobDetailView: View {
                                 }
                             )
                         )
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .neutralGlass(in: RoundedRectangle(cornerRadius: 9, style: .continuous), material: .thinMaterial, strokeOpacity: 0.40, shadowOpacity: 0.0)
+                        .textFieldStyle(.roundedBorder)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
                 }
             }
-            .padding(18)
-            .neutralGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), strokeOpacity: 0.42, shadowOpacity: 0.055)
+            .systemGroupedPanel()
         }
     }
 
@@ -182,14 +201,31 @@ struct JobDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Label(section.title, systemImage: "bookmark")
-                    .font(.headline)
+                    .font(.callout.weight(.semibold))
                 Spacer()
                 Text("\(section.segments.count) 段")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            HStack(spacing: 14) {
+                Text("#")
+                    .frame(width: 34)
+                Text("说话人")
+                    .frame(width: 190, alignment: .leading)
+                Text("时间")
+                    .frame(width: 250, alignment: .leading)
+                Text("文本")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
 
             Divider()
 
@@ -202,7 +238,7 @@ struct JobDetailView: View {
                 }
             }
         }
-        .neutralGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), strokeOpacity: 0.42, shadowOpacity: 0.055)
+        .systemGroupedPanel()
     }
 
     private func transcriptSegment(_ segment: TranscriptSegment) -> some View {
@@ -210,25 +246,48 @@ struct JobDetailView: View {
             speakerMark(segment.speaker)
                 .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Text(viewModel.displayName(for: segment.speaker))
-                        .font(.callout.weight(.semibold))
+            Text(viewModel.displayName(for: segment.speaker))
+                .font(.subheadline.weight(.medium))
+                .frame(width: 190, alignment: .leading)
 
-                    Text("\(segment.start) - \(segment.end)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+            Text("\(segment.start) - \(segment.end)")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 250, alignment: .leading)
 
-                Text(segment.text)
-                    .font(.system(size: 15))
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text(segment.text)
+                .font(.subheadline)
+                .lineSpacing(3)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func rawTranscript(job: TranscriptionJob) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Label("原文", systemImage: "doc.plaintext")
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text("\(segmentCount(job)) 段")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            Text(rawTranscriptText(job))
+                .font(.subheadline)
+                .lineSpacing(4)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+        }
+        .systemGroupedPanel()
     }
 
     private func emptyTranscript(job: TranscriptionJob) -> some View {
@@ -246,19 +305,15 @@ struct JobDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 72)
-        .neutralGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), strokeOpacity: 0.40, shadowOpacity: 0.055)
+        .systemGroupedPanel()
     }
 
     private func speakerMark(_ speaker: String) -> some View {
-        Circle()
-            .fill(speakerColor(speaker).gradient)
-            .frame(width: 34, height: 34)
-            .overlay {
-                Text(speakerInitial(speaker))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
-            }
-            .shadow(color: speakerColor(speaker).opacity(0.22), radius: 8, y: 3)
+        Text(speakerInitial(speaker))
+            .font(.subheadline.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .frame(width: 30, height: 30)
     }
 
     private func statusPill(_ status: JobStatus) -> some View {
@@ -288,6 +343,17 @@ struct JobDetailView: View {
         return colors[index]
     }
 
+    private var metricFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.50)
+    }
+
+    private func rawTranscriptText(_ job: TranscriptionJob) -> String {
+        job.transcriptSections
+            .flatMap(\.segments)
+            .map(\.text)
+            .joined(separator: "\n\n")
+    }
+
     private func statusTitle(_ status: JobStatus) -> String {
         switch status {
         case .queued: "等待中"
@@ -313,5 +379,28 @@ struct JobDetailView: View {
         case .completed: .green
         case .failed: .red
         }
+    }
+}
+
+private struct SystemGroupedPanel: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(panelFill, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(.separator.opacity(colorScheme == .dark ? 0.34 : 0.22))
+            )
+    }
+
+    private var panelFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.52)
+    }
+}
+
+private extension View {
+    func systemGroupedPanel() -> some View {
+        modifier(SystemGroupedPanel())
     }
 }

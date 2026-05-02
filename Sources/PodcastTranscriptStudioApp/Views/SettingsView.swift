@@ -4,6 +4,7 @@ import PodcastTranscriptStudioCore
 
 struct SettingsView: View {
     @ObservedObject var viewModel: AppViewModel
+    @AppStorage(AppIconPreference.storageKey) private var appIconPreferenceRawValue = AppIconPreference.system.rawValue
 
     @State private var jobsDirectoryPath = ""
     @State private var exportsDirectoryPath = ""
@@ -18,6 +19,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+
+                iconSection
 
                 modelSection
 
@@ -179,6 +182,37 @@ struct SettingsView: View {
         }
     }
 
+    private var iconSection: some View {
+        SettingsGroup(title: "应用图标", icon: "app") {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Dock 图标")
+                            .font(.callout.weight(.medium))
+                        Text("选择后立即应用。跟随系统会按浅色、深色外观自动切换。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 10) {
+                    ForEach(AppIconPreference.allCases) { preference in
+                        AppIconChoiceButton(
+                            preference: preference,
+                            selectedPreference: selectedIconPreference,
+                            configuration: viewModel.configuration
+                        ) {
+                            appIconPreferenceRawValue = preference.rawValue
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+        }
+    }
+
     private var runtimeSection: some View {
         SettingsGroup(title: "运行时", icon: "gearshape.2") {
             DisclosureGroup(isExpanded: $showRuntimeDetails) {
@@ -248,6 +282,10 @@ struct SettingsView: View {
         viewModel.modelAssetStatuses.filter(\.isInstalled).count
     }
 
+    private var selectedIconPreference: AppIconPreference {
+        AppIconPreference(rawValue: appIconPreferenceRawValue) ?? .system
+    }
+
     private var modelGridColumns: [GridItem] {
         [
             GridItem(.flexible(minimum: 210), spacing: 10),
@@ -280,6 +318,7 @@ struct SettingsView: View {
     private func resetSettings() {
         do {
             try viewModel.resetConfiguration()
+            appIconPreferenceRawValue = AppIconPreference.system.rawValue
             settingsMessage = "已恢复默认配置"
         } catch {
             settingsMessage = "恢复失败：\(error.localizedDescription)"
@@ -349,6 +388,67 @@ private struct SettingsSummaryPill: View {
             strokeOpacity: 0.32,
             shadowOpacity: 0.02
         )
+    }
+}
+
+private struct AppIconChoiceButton: View {
+    let preference: AppIconPreference
+    let selectedPreference: AppIconPreference
+    let configuration: AppConfiguration
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isSelected: Bool {
+        preference == selectedPreference
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                AppIconPreviewImage(
+                    variant: preference.resolvedVariant(for: colorScheme),
+                    configuration: configuration
+                )
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.42))
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: preference.systemImage)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(isSelected ? .blue : .secondary)
+                            .symbolRenderingMode(.hierarchical)
+                        Text(preference.title)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
+                    Text(preference.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.blue : Color.secondary.opacity(0.45))
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(isSelected ? Color.blue.opacity(0.50) : Color.primary.opacity(0.08))
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

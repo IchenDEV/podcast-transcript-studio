@@ -15,9 +15,11 @@ struct ContentView: View {
     @State private var diarize = true
     @State private var cleanFillers = true
     @State private var selectedPanel: DetailPanel = .result
+    @State private var transcriptMode: TranscriptDisplayMode = .detail
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 viewModel: viewModel,
                 selectedPanel: $selectedPanel,
@@ -28,24 +30,30 @@ struct ContentView: View {
                 },
                 onImportPodcast: {
                     showingPodcastLinkSheet = true
-                },
-                onExport: export
+                }
+            )
+            .navigationSplitViewColumnWidth(
+                min: SidebarColumnWidth.minimum,
+                ideal: SidebarColumnWidth.ideal,
+                max: SidebarColumnWidth.maximum
             )
         } detail: {
             ZStack {
                 backgroundLayer
                 switch selectedPanel {
                 case .result:
-                    JobDetailView(viewModel: viewModel)
+                    JobDetailView(viewModel: viewModel, displayMode: transcriptMode)
                 case .settings:
                     SettingsView(viewModel: viewModel)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                detailToolbar
+            }
         }
         .background(backgroundLayer)
         .background(WindowGlassConfigurator())
-        .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
         .overlay(alignment: .top) {
             if viewModel.isRunningJob {
                 runningBanner
@@ -90,21 +98,56 @@ struct ContentView: View {
 
     private var backgroundLayer: some View {
         ZStack {
+            Rectangle().fill(.regularMaterial)
             Rectangle()
-                .fill(.ultraThinMaterial)
-            Rectangle()
-                .fill(colorScheme == .dark ? Color.black.opacity(0.42) : Color.white.opacity(0.34))
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.025 : 0.16),
-                    Color.gray.opacity(colorScheme == .dark ? 0.055 : 0.035),
-                    Color.black.opacity(colorScheme == .dark ? 0.10 : 0.015),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+                .fill(colorScheme == .dark ? Color.black.opacity(0.24) : Color.white.opacity(0.56))
         }
         .ignoresSafeArea()
+    }
+
+    @ToolbarContentBuilder
+    private var detailToolbar: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .navigation) {
+                Text("Podcast Transcript Studio")
+                    .font(.headline.weight(.semibold))
+                    .padding(.leading, 18)
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) {
+                Text("Podcast Transcript Studio")
+                    .font(.headline.weight(.semibold))
+                    .padding(.leading, 18)
+            }
+        }
+
+        ToolbarItem(placement: .principal) {
+            DetailModeSegmentedControl(selection: $transcriptMode)
+            .disabled(selectedPanel != .result || viewModel.selectedJob == nil)
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            exportToolbarMenu
+        }
+    }
+
+    private var exportToolbarMenu: some View {
+        Menu {
+            Button("导出 TXT") {
+                export(.txt)
+            }
+            Button("导出 JSON") {
+                export(.json)
+            }
+            Button("导出 SRT") {
+                export(.srt)
+            }
+        } label: {
+            Label("导出", systemImage: "square.and.arrow.up")
+        }
+        .menuStyle(.button)
+        .disabled(viewModel.selectedJob == nil || viewModel.isRunningJob)
     }
 
     private var runningBanner: some View {
@@ -120,10 +163,8 @@ struct ContentView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.regularMaterial, in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(.separator.opacity(colorScheme == .dark ? 0.38 : 0.55))
-        )
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.36 : 0.12), radius: 18, y: 8)
+        .overlay(Capsule().strokeBorder(.separator.opacity(0.36)))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.24 : 0.08), radius: 12, y: 5)
     }
 
     private func export(_ format: ExportFormat) {
@@ -217,6 +258,50 @@ private struct PodcastLinkImportSheet: View {
     }
 }
 
+private struct DetailModeSegmentedControl: View {
+    @Binding var selection: TranscriptDisplayMode
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(TranscriptDisplayMode.allCases) { mode in
+                Button {
+                    selection = mode
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: mode.systemImage)
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 13)
+                        Text(mode.title)
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(selection == mode ? Color.primary : Color.secondary)
+                    .frame(width: 64, height: 28)
+                    .background(segmentFill(for: mode), in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(.separator.opacity(colorScheme == .dark ? 0.24 : 0.18))
+        )
+        .opacity(isEnabled ? 1 : 0.45)
+    }
+
+    private func segmentFill(for mode: TranscriptDisplayMode) -> Color {
+        guard selection == mode else { return .clear }
+        if colorScheme == .dark {
+            return Color.white.opacity(0.16)
+        }
+        return Color.white.opacity(0.70)
+    }
+}
+
 enum DetailPanel: String, CaseIterable, Identifiable {
     case result
     case settings
@@ -234,6 +319,27 @@ enum DetailPanel: String, CaseIterable, Identifiable {
         switch self {
         case .result: "doc.text"
         case .settings: "gearshape"
+        }
+    }
+}
+
+enum TranscriptDisplayMode: String, CaseIterable, Identifiable {
+    case detail
+    case raw
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .detail: "详情"
+        case .raw: "原文"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .detail: "list.bullet.rectangle"
+        case .raw: "doc.plaintext"
         }
     }
 }
@@ -257,6 +363,8 @@ private struct WindowGlassConfigurator: NSViewRepresentable {
         guard let window else { return }
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.titleVisibility = .hidden
+        window.toolbarStyle = .unified
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
     }

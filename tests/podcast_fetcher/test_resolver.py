@@ -48,6 +48,27 @@ def test_resolve_apple_podcast_from_lookup_feed():
     assert resolved.audio_url == 'https://audio.example.com/parker.m4a'
 
 
+def test_resolve_apple_podcast_when_page_contains_audio_url():
+    source_url = (
+        'https://podcasts.apple.com/cn/podcast/%E5%A3%B0%E5%8A%A8%E6%97%A9%E5%92%96%E5%95%A1/'
+        'id1573189055?i=1000764203947'
+    )
+    pages = {
+        source_url: b'''
+            <html>
+              <head><meta property="og:title" content="Episode title" /></head>
+              <body><script>window.audio = "https:\\/\\/jt.ximalaya.com\\/audio\\/episode.m4a?channel=rss"</script></body>
+            </html>
+        ''',
+    }
+
+    resolved = resolve_podcast_audio(source_url, read_url=pages.__getitem__)
+
+    assert resolved.platform == 'apple_podcasts'
+    assert resolved.title == 'Episode title'
+    assert resolved.audio_url == 'https://jt.ximalaya.com/audio/episode.m4a?channel=rss'
+
+
 def test_resolve_ximalaya_from_public_play_api():
     pages = {
         'https://www.ximalaya.com/sound/123456': b'<html><title>Demo</title></html>',
