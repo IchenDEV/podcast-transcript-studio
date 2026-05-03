@@ -26,6 +26,19 @@ from typing import List, Optional, Tuple
 import numpy as np
 from transformers import pipeline
 
+try:
+    from packages.python_worker.text_refinement import (
+        DEFAULT_TEXT_MODEL_REPOSITORY,
+        QwenTranscriptRefiner,
+        apply_refinement_to_utterances,
+    )
+except ImportError:
+    from text_refinement import (
+        DEFAULT_TEXT_MODEL_REPOSITORY,
+        QwenTranscriptRefiner,
+        apply_refinement_to_utterances,
+    )
+
 
 PRESET_DEFAULTS = {
     "production": {
@@ -58,37 +71,6 @@ PRESET_DEFAULTS = {
         "beam_size": 4,
         "vad": False,
     },
-}
-
-TECH_TERM_REPLACEMENTS = {
-    r"\bAgin\b": "Agent",
-    r"\bAGEN\b": "Agent",
-    r"\bAgen\b": "Agent",
-    r"\bagent\b": "Agent",
-    r"\bskills\b": "Skills",
-    r"\bskill\b": "Skill",
-    r"\bAPI[s]?\b": "API",
-    r"\bcontext\b": "Context",
-    r"\bCloud Code\b": "Cloud Code",
-    r"\bNATV\b": "Native",
-}
-
-CHINESE_REPLACEMENTS = {
-    "极客公園": "极客公园",
-    "開始联系": "开始连接",
-    "Linksstart": "LinkStart",
-    "一樣": "AI",
-    "挨振": "Agent",
-    "挨阵": "Agent",
-    "A盛": "Agent",
-    "A陣": "Agent",
-    "偷肯": "Token",
-    "猫都": "模型",
-    "副能": "赋能",
-    "元身": "原生",
-    "语论": "舆论",
-    "突弊": "toB",
-    "科公园": "极客公园",
 }
 
 FILLER_PATTERNS = [
@@ -152,11 +134,6 @@ def clean_text(text: str, remove_fillers: bool = True) -> str:
     t = normalize_text(text)
     if not t:
         return t
-
-    for patt, repl in TECH_TERM_REPLACEMENTS.items():
-        t = re.sub(patt, repl, t, flags=re.IGNORECASE)
-    for src, dst in CHINESE_REPLACEMENTS.items():
-        t = t.replace(src, dst)
 
     # 清掉明显重复，如“这个这个”“就是就是”
     t = re.sub(r"\b(\w+)(\s+\1\b)+", r"\1", t)
@@ -465,6 +442,8 @@ def apply_speakers(utterances: List[ASRUtterance], spans: List[Tuple[float, floa
 
 
 def _normalize_speaker(raw: str, mp: dict) -> str:
+    if raw and not _looks_diarization_speaker(raw):
+        return raw
     if raw in mp:
         return mp[raw]
     if raw.startswith("说话人"):
@@ -475,6 +454,18 @@ def _normalize_speaker(raw: str, mp: dict) -> str:
     label = f"说话人{idx}"
     mp[raw] = label
     return label
+
+
+def _looks_diarization_speaker(raw: str) -> bool:
+    if raw.startswith("说话人"):
+        return True
+    return re.fullmatch(r"(?:SPEAKER[_ -]?)?\d+", raw, flags=re.IGNORECASE) is not None
+
+
+def normalize_utterance_speakers(utterances: List[ASRUtterance]) -> None:
+    spk_map = {}
+    for utterance in sorted(utterances, key=lambda x: x.start):
+        utterance.speaker = _normalize_speaker(utterance.speaker, spk_map)
 
 
 def split_sentences(text: str, max_len: int = 44) -> List[str]:
@@ -615,6 +606,9 @@ def parse_args():
     ap.add_argument("--no-vad", action="store_true", help="显式关闭 VAD")
     ap.add_argument("--diarize", action="store_true", help="启用发言人分离")
     ap.add_argument("--diarization-model", default=None, help="pyannote 模型名或本地路径")
+    ap.add_argument("--text-model", default=None, help=f"文本后处理模型名或本地路径（默认 {DEFAULT_TEXT_MODEL_REPOSITORY}）")
+    ap.add_argument("--text-model-device", default="cpu", choices=["cpu", "cuda", "mps", "auto"], help="文本后处理模型设备")
+    ap.add_argument("--skip-text-refinement", action="store_true", help="跳过模型文本修正和姓名识别")
     ap.add_argument("--hf-token", default=None, help="HF token")
     ap.add_argument("--offline", action="store_true", help="强制离线")
     ap.add_argument("--keep-fillers", action="store_true", help="保留口语词，不做清洗")
@@ -674,6 +668,20 @@ def main() -> None:
             print(f"[warn] 发言人分离执行失败：{type(e).__name__}: {e}")
             speaker_spans = []
     apply_speakers(asr_chunks, speaker_spans)
+    normalize_utterance_speakers(asr_chunks)
+
+    if not args.skip_text_refinement:
+        try:
+            text_model = (
+                args.text_model
+                or os.environ.get("PODCAST_TEXT_MODEL")
+                or os.environ.get("PODCAST_TEXT_MODEL_REPOSITORY")
+                or DEFAULT_TEXT_MODEL_REPOSITORY
+            )
+            refinement = QwenTranscriptRefiner(model_ref=text_model, device=args.text_model_device).refine(asr_chunks)
+            apply_refinement_to_utterances(asr_chunks, refinement)
+        except Exception as e:
+            print(f"[warn] 文本模型后处理未启用：{type(e).__name__}: {e}")
 
     export_text(asr_chunks, args.section_seconds, out_txt)
     if args.json:

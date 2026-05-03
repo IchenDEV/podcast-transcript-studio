@@ -13,6 +13,7 @@ MODELS = [
     ("pyannote/speaker-diarization-3.1", "speaker-diarization-3.1", ["config.yaml"]),
     ("pyannote/segmentation-3.0", "segmentation-3.0", ["config.yaml", "pytorch_model.bin"]),
     ("pyannote/wespeaker-voxceleb-resnet34-LM", "wespeaker-voxceleb-resnet34-LM", ["config.yaml", "pytorch_model.bin"]),
+    ("Qwen/Qwen3-0.6B", "Qwen3-0.6B", ["config.json", "model.safetensors", "tokenizer.json"]),
 ]
 
 

@@ -23,6 +23,12 @@ public struct ModelAssetStatus: Identifiable, Equatable, Sendable {
 }
 
 public enum ModelAssets {
+    public static let textRefinement = ModelAsset(
+        repository: "Qwen/Qwen3-0.6B",
+        directoryName: "Qwen3-0.6B",
+        requiredFiles: ["config.json", "model.safetensors", "tokenizer.json"]
+    )
+
     public static let required: [ModelAsset] = [
         ModelAsset(
             repository: "openai/whisper-tiny",
@@ -44,5 +50,6 @@ public enum ModelAssets {
             directoryName: "wespeaker-voxceleb-resnet34-LM",
             requiredFiles: ["config.yaml", "pytorch_model.bin"]
         ),
+        textRefinement,
     ]
 }

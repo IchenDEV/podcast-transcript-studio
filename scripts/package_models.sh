@@ -47,6 +47,7 @@ copy_latest_snapshot "openai/whisper-tiny" "config.json" "pytorch_model.bin" || 
 copy_latest_snapshot "pyannote/speaker-diarization-3.1" "config.yaml" || missing=1
 copy_latest_snapshot "pyannote/segmentation-3.0" "config.yaml" "pytorch_model.bin" || missing=1
 copy_latest_snapshot "pyannote/wespeaker-voxceleb-resnet34-LM" "config.yaml" "pytorch_model.bin" || missing=1
+copy_latest_snapshot "Qwen/Qwen3-0.6B" "config.json" "model.safetensors" "tokenizer.json" || missing=1
 
 patch_diarization_config() {
   python3 - "$MODELS_OUT" <<'PY'
@@ -73,6 +74,7 @@ PY
 }
 
 cp "$WORKER_SRC/cli.py" "$SCRIPTS_OUT/cli.py"
+cp "$WORKER_SRC/text_refinement.py" "$SCRIPTS_OUT/text_refinement.py"
 cp "$WORKER_SRC/transcribe_with_speaker_segmentation.py" "$SCRIPTS_OUT/transcribe_with_speaker_segmentation.py"
 echo "copied worker scripts"
 

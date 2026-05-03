@@ -9,6 +9,7 @@ public struct PackagingPlan: Equatable, Sendable {
         defaultASRModel: "openai/whisper-tiny",
         requiredModelRepositories: ModelAssets.required.map(\.repository),
         requiredScriptFiles: [
+            "text_refinement.py",
             "transcribe_with_speaker_segmentation.py"
         ]
     )

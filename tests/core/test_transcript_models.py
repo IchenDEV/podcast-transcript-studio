@@ -33,3 +33,20 @@ def test_transcript_document_from_sections_keeps_readable_text():
 
     assert document.sections[0].title == '分节1'
     assert document.readable_text == '说话人1：测试内容'
+
+
+def test_transcript_document_keeps_model_refined_speaker_names():
+    sections = [
+        TranscriptSection(
+            title='分节1',
+            segments=[
+                TranscriptSegment(start='00:00:00.000', end='00:00:02.000', speaker='张三', text='大家好，我是张三，欢迎大家。'),
+                TranscriptSegment(start='00:00:02.000', end='00:00:04.000', speaker='李四', text='我叫李四，今天来聊开源。'),
+            ],
+        )
+    ]
+
+    document = TranscriptDocument.from_sections(sections)
+
+    assert '张三：大家好，我是张三，欢迎大家。' in document.readable_text
+    assert '李四：我叫李四，今天来聊开源。' in document.readable_text

@@ -19,6 +19,7 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.environment["PODCAST_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.environment["PODCAST_BUNDLED_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.outputTextURL.path.contains(job.id.uuidString))
+        XCTAssertEqual(command.environment["PODCAST_TEXT_MODEL_REPOSITORY"], "Qwen/Qwen3-0.6B")
     }
 
     func test_command_builder_uses_local_models_when_available() throws {
@@ -26,8 +27,10 @@ final class WorkerCommandBuilderTests: XCTestCase {
         let config = AppConfiguration.preview(baseDirectory: base)
         let whisper = config.modelsDirectory.appendingPathComponent("whisper-tiny", isDirectory: true)
         let diarization = config.modelsDirectory.appendingPathComponent("speaker-diarization-3.1", isDirectory: true)
+        let textModel = config.modelsDirectory.appendingPathComponent("Qwen3-0.6B", isDirectory: true)
         try FileManager.default.createDirectory(at: whisper, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: diarization, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: textModel, withIntermediateDirectories: true)
 
         let command = try WorkerCommandBuilder(configuration: config).makeCommand(
             job: TranscriptionJob(filename: "demo.m4a"),
@@ -40,5 +43,7 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains(whisper.path))
         XCTAssertTrue(command.arguments.contains("--diarization-model"))
         XCTAssertTrue(command.arguments.contains(diarization.path))
+        XCTAssertTrue(command.arguments.contains("--text-model"))
+        XCTAssertTrue(command.arguments.contains(textModel.path))
     }
 }
