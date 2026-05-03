@@ -41,6 +41,11 @@ public struct WorkerCommandBuilder {
         if diarize, let diarizationModelURL = firstExistingModel(named: "speaker-diarization-3.1") {
             arguments.append(contentsOf: ["--diarization-model", diarizationModelURL.path])
         }
+        if let textModelURL = firstExistingModel(named: ModelAssets.textRefinement.directoryName) {
+            arguments.append(contentsOf: ["--text-model", textModelURL.path])
+        } else {
+            arguments.append(contentsOf: ["--text-model", ModelAssets.textRefinement.repository])
+        }
         if !cleanFillers { arguments.append("--keep-fillers") }
 
         let pythonRuntime = configuration.resolvedPythonRuntime()
@@ -50,6 +55,7 @@ public struct WorkerCommandBuilder {
             "PODCAST_MODELS_DIR": configuration.modelsDirectory.path,
             "PODCAST_BUNDLED_MODELS_DIR": configuration.bundledModelsDirectory.path,
             "PODCAST_SCRIPTS_DIR": configuration.scriptsDirectory.path,
+            "PODCAST_TEXT_MODEL_REPOSITORY": ModelAssets.textRefinement.repository,
         ]
         if let pythonRuntime {
             for (key, value) in pythonRuntime.environment {

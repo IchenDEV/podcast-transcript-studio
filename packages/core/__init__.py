@@ -1,4 +1,9 @@
-from .transcript import TranscriptDocument, TranscriptSection, TranscriptSegment, build_readable_transcript
+from .transcript import (
+    TranscriptDocument,
+    TranscriptSection,
+    TranscriptSegment,
+    build_readable_transcript,
+)
 
 __all__ = [
     'TranscriptDocument',

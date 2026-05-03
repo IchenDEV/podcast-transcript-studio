@@ -10,7 +10,7 @@ def test_web_routes_create_list_and_show_job(tmp_path, monkeypatch):
     def fake_start_job(repository, settings, job_id, source_path, filename, diarize, clean_fillers, mode='standard'):
         repository.update_job(job_id, status='completed', output_path=str(tmp_path / 'transcript.txt'))
         (tmp_path / 'transcript.txt').write_text(
-            '【分节1】（约 180 秒）\n\n[00:00:00.000 - 00:00:01.000] 说话人1: 测试内容\n',
+            '【分节1】（约 180 秒）\n\n[00:00:00.000 - 00:00:01.000] 张三: 大家好，我是张三，测试内容\n',
             encoding='utf-8',
         )
 
@@ -42,7 +42,8 @@ def test_web_routes_create_list_and_show_job(tmp_path, monkeypatch):
     assert detail.status_code == 200
     assert '测试内容' in detail.text
     assert '可读稿' in detail.text
-    assert '说话人1：测试内容' in detail.text
+    assert '张三：大家好，我是张三，测试内容' in detail.text
+    assert '<span class="speaker">张三</span>' in detail.text
 
     download = client.get('/jobs/1/download/txt')
     assert download.status_code == 200

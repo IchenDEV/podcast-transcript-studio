@@ -9,7 +9,7 @@ final class TranscriptionCoordinatorTests: XCTestCase {
         let store = JobStore()
         let runner = FakeWorkerRunner { command in
             try FileManager.default.createDirectory(at: command.outputTextURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try "【分节1】\n\n[00:00:00.000 - 00:00:02.000] 说话人1: 测试内容\n".write(to: command.outputTextURL, atomically: true, encoding: .utf8)
+            try "【分节1】\n\n[00:00:00.000 - 00:00:02.000] 张三: 大家好，我是张三，测试内容\n".write(to: command.outputTextURL, atomically: true, encoding: .utf8)
             try "{}".write(to: command.outputJSONURL, atomically: true, encoding: .utf8)
         }
         let coordinator = TranscriptionCoordinator(configuration: configuration, jobStore: store, runner: runner)
@@ -20,7 +20,9 @@ final class TranscriptionCoordinatorTests: XCTestCase {
         XCTAssertEqual(job.status, .completed)
         XCTAssertEqual(store.jobs.count, 1)
         XCTAssertEqual(store.jobs[0].status, .completed)
-        XCTAssertEqual(store.jobs[0].transcriptSections.first?.segments.first?.text, "测试内容")
+        XCTAssertEqual(store.jobs[0].transcriptSections.first?.segments.first?.text, "大家好，我是张三，测试内容")
+        XCTAssertEqual(store.jobs[0].transcriptSections.first?.segments.first?.speaker, "张三")
+        XCTAssertTrue(store.jobs[0].speakerDisplayNames.isEmpty)
         XCTAssertEqual(store.jobs[0].transcriptPath?.lastPathComponent, "transcript.txt")
     }
 

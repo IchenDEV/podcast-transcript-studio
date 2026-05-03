@@ -31,7 +31,7 @@
           {% for segment in section.segments %}
           <li>
             <span class="time">[{{ segment.start }} - {{ segment.end }}]</span>
-            <span class="speaker">{{ segment.speaker }}</span>
+            <span class="speaker">{{ document.display_name(segment.speaker) }}</span>
             <span class="text">{{ segment.text }}</span>
           </li>
           {% endfor %}

@@ -10,6 +10,9 @@ from packages.transcriber.modes import resolve_mode_settings
 from podcast_web.repository import JobRepository
 
 
+DEFAULT_TEXT_MODEL = 'Qwen/Qwen3-0.6B'
+
+
 def build_transcription_command(settings, job_id: int, source_path: Path, filename: str, diarize: bool, clean_fillers: bool, mode: str = 'standard') -> Tuple[List[str], Path, Path]:
     job_dir = settings.jobs_dir / str(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -30,6 +33,8 @@ def build_transcription_command(settings, job_id: int, source_path: Path, filena
         str(output_json),
         "--preset",
         mode_settings.worker_preset,
+        "--text-model",
+        DEFAULT_TEXT_MODEL,
     ]
     if diarize:
         cmd.append("--diarize")

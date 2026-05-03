@@ -32,6 +32,8 @@ def test_build_transcription_command_uses_packaged_worker(tmp_path):
     assert '--json' in cmd
     assert '--preset' in cmd
     assert 'balanced' in cmd
+    assert '--text-model' in cmd
+    assert 'Qwen/Qwen3-0.6B' in cmd
     assert output_txt.name == 'transcript.txt'
     assert output_json.name == 'transcript.json'
 
