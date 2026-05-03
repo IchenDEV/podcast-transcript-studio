@@ -14,7 +14,7 @@ enum AppIconPreference: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .system:
-            "跟随系统"
+            "默认"
         case .black:
             "黑色"
         case .white:
@@ -25,7 +25,7 @@ enum AppIconPreference: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .system:
-            "按当前系统外观自动切换"
+            "与应用启动图标保持一致"
         case .black:
             "始终显示黑色图标"
         case .white:
@@ -44,10 +44,10 @@ enum AppIconPreference: String, CaseIterable, Identifiable {
         }
     }
 
-    func resolvedVariant(for colorScheme: ColorScheme) -> AppIconVariant {
+    func resolvedVariant(for _: ColorScheme) -> AppIconVariant {
         switch self {
         case .system:
-            colorScheme == .dark ? .black : .white
+            .white
         case .black:
             .black
         case .white:

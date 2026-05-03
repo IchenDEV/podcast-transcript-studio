@@ -33,6 +33,7 @@ public struct WorkerCommandBuilder {
             "--output", outputTextURL.path,
             "--json", outputJSONURL.path,
             "--preset", "balanced",
+            "--chinese-variant", configuration.chineseTextVariant.rawValue,
         ]
         if let asrModelURL = firstExistingModel(named: "whisper-tiny") {
             arguments.append(contentsOf: ["--asr-model", asrModelURL.path])

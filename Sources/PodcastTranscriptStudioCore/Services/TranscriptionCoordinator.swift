@@ -24,12 +24,19 @@ public final class TranscriptionCoordinator {
     @discardableResult
     public func startTranscription(
         sourceURL: URL,
+        jobID: UUID? = nil,
         diarize: Bool = true,
         cleanFillers: Bool = true
     ) async throws -> TranscriptionJob {
-        let job = TranscriptionJob(filename: sourceURL.lastPathComponent, status: .queued)
+        var job = jobID.flatMap { jobStore.job(id: $0) }
+            ?? TranscriptionJob(id: jobID ?? UUID(), filename: sourceURL.lastPathComponent, status: .queued)
+        job.filename = sourceURL.lastPathComponent
+        job.status = .queued
+        job.progress = 0.05
+        job.progressMessage = "等待转写"
         jobStore.upsert(job)
         jobStore.updateStatus(for: job.id, status: .running)
+        jobStore.updateProgress(for: job.id, progress: nil, message: "本地转写中")
 
         let command = try commandBuilder.makeCommand(job: job, sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
 
@@ -42,6 +49,8 @@ public final class TranscriptionCoordinator {
             completed.transcriptPath = command.outputTextURL
             completed.logPath = nil
             completed.errorMessage = nil
+            completed.progress = nil
+            completed.progressMessage = nil
             completed.transcriptSections = sections
             jobStore.upsert(completed)
             return completed
@@ -51,6 +60,8 @@ public final class TranscriptionCoordinator {
             failed.status = .failed
             failed.errorMessage = error.localizedDescription
             failed.logPath = logPath
+            failed.progress = nil
+            failed.progressMessage = nil
             jobStore.upsert(failed)
             throw error
         }

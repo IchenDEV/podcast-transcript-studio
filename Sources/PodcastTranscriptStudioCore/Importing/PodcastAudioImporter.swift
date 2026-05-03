@@ -33,7 +33,11 @@ public enum PodcastAudioImportError: LocalizedError {
     }
 }
 
-public final class PodcastAudioImporter {
+public protocol PodcastAudioImporting: Sendable {
+    func importAudio(from pageURL: URL) async throws -> URL
+}
+
+public final class PodcastAudioImporter: PodcastAudioImporting, @unchecked Sendable {
     public typealias DataLoader = @Sendable (URL) async throws -> Data
 
     fileprivate static let audioExtensions: Set<String> = ["mp3", "m4a", "mp4", "m4b", "wav", "aac", "flac", "ogg", "opus"]

@@ -1,5 +1,13 @@
 import Foundation
 
+public enum ChineseTextVariant: String, CaseIterable, Codable, Identifiable, Sendable {
+    case simplified
+    case traditional
+    case original
+
+    public var id: String { rawValue }
+}
+
 public struct AppConfiguration: Equatable, Sendable {
     public let appName: String
     public let baseDirectory: URL
@@ -12,6 +20,7 @@ public struct AppConfiguration: Equatable, Sendable {
     public let modelsDirectory: URL
     public let bundledModelsDirectory: URL
     public let scriptsDirectory: URL
+    public let chineseTextVariant: ChineseTextVariant
 
     public init(
         appName: String = "Podcast Transcript Studio",
@@ -31,6 +40,7 @@ public struct AppConfiguration: Equatable, Sendable {
         self.bundledModelsDirectory = bundledResourcesDirectory.appendingPathComponent("Models", isDirectory: true)
         self.modelsDirectory = overrides.modelsDirectoryURL ?? defaultSupportDirectory.appendingPathComponent("Models", isDirectory: true)
         self.scriptsDirectory = bundledResourcesDirectory.appendingPathComponent("Scripts", isDirectory: true)
+        self.chineseTextVariant = overrides.chineseTextVariant ?? .simplified
     }
 
     public static func preview(baseDirectory: URL) -> AppConfiguration {
@@ -121,21 +131,29 @@ public struct AppConfiguration: Equatable, Sendable {
 
     private func projectRoots(startingAt start: URL, fileManager: FileManager) -> [URL] {
         var roots: [URL] = []
-        var current = start.standardizedFileURL
+        let initialURL = start.standardizedFileURL
+        var current = initialURL
         if !current.hasDirectoryPath {
             current.deleteLastPathComponent()
         }
+        var currentPath = current.path
+        var visited = Set<String>()
 
-        while true {
-            if fileManager.fileExists(atPath: current.appendingPathComponent("Package.swift").path) {
-                roots.append(current)
-            }
-
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path {
+        while !currentPath.isEmpty {
+            guard visited.insert(currentPath).inserted else {
                 break
             }
-            current = parent
+
+            let packagePath = (currentPath as NSString).appendingPathComponent("Package.swift")
+            if fileManager.fileExists(atPath: packagePath) {
+                roots.append(URL(fileURLWithPath: currentPath, isDirectory: true))
+            }
+
+            let parentPath = (currentPath as NSString).deletingLastPathComponent
+            if parentPath == currentPath || parentPath.isEmpty {
+                break
+            }
+            currentPath = parentPath
         }
 
         return roots
@@ -164,17 +182,20 @@ public struct AppConfigurationOverrides: Codable, Equatable, Sendable {
     public var exportsDirectoryPath: String?
     public var logsDirectoryPath: String?
     public var modelsDirectoryPath: String?
+    public var chineseTextVariant: ChineseTextVariant?
 
     public init(
         jobsDirectoryPath: String? = nil,
         exportsDirectoryPath: String? = nil,
         logsDirectoryPath: String? = nil,
-        modelsDirectoryPath: String? = nil
+        modelsDirectoryPath: String? = nil,
+        chineseTextVariant: ChineseTextVariant? = nil
     ) {
         self.jobsDirectoryPath = jobsDirectoryPath
         self.exportsDirectoryPath = exportsDirectoryPath
         self.logsDirectoryPath = logsDirectoryPath
         self.modelsDirectoryPath = modelsDirectoryPath
+        self.chineseTextVariant = chineseTextVariant
     }
 
     public var jobsDirectoryURL: URL? { url(from: jobsDirectoryPath) }

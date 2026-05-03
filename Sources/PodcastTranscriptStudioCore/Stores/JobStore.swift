@@ -24,6 +24,17 @@ public final class JobStore {
         jobs[index].status = status
     }
 
+    public func updateProgress(for id: UUID, progress: Double?, message: String?) {
+        guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
+        jobs[index].progress = progress
+        jobs[index].progressMessage = message
+    }
+
+    public func updateFilename(for id: UUID, filename: String) {
+        guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
+        jobs[index].filename = filename
+    }
+
     public func updateSpeakerName(for id: UUID, speaker: String, displayName: String) {
         guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
         jobs[index].speakerDisplayNames[speaker] = displayName

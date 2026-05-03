@@ -20,6 +20,7 @@ import re
 import subprocess
 import wave
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -82,6 +83,80 @@ FILLER_PATTERNS = [
     r"(^|[，。！？、\s])那个([，。！？、\s]|$)",
 ]
 
+FALLBACK_T2S_PAIRS = {
+    "開": "开",
+    "體": "体",
+    "驗": "验",
+    "臺": "台",
+    "灣": "湾",
+    "節": "节",
+    "語": "语",
+    "說": "说",
+    "話": "话",
+    "廣": "广",
+    "東": "东",
+    "國": "国",
+    "門": "门",
+    "風": "风",
+    "車": "车",
+    "電": "电",
+    "腦": "脑",
+    "網": "网",
+    "頁": "页",
+    "標": "标",
+    "題": "题",
+    "內": "内",
+    "現": "现",
+    "場": "场",
+    "長": "长",
+    "應": "应",
+    "該": "该",
+    "來": "来",
+    "對": "对",
+    "個": "个",
+    "們": "们",
+    "為": "为",
+    "與": "与",
+    "這": "这",
+    "時": "时",
+    "間": "间",
+    "後": "后",
+    "會": "会",
+    "還": "还",
+    "過": "过",
+    "點": "点",
+    "線": "线",
+    "園": "园",
+    "數": "数",
+    "據": "据",
+    "產": "产",
+    "業": "业",
+    "發": "发",
+    "變": "变",
+    "區": "区",
+    "機": "机",
+    "構": "构",
+    "買": "买",
+    "賣": "卖",
+    "價": "价",
+    "錢": "钱",
+    "錄": "录",
+    "轉": "转",
+    "檔": "档",
+    "訊": "讯",
+    "問": "问",
+    "優": "优",
+    "勢": "势",
+    "劃": "划",
+    "劉": "刘",
+}
+
+FALLBACK_TRADITIONAL_TO_SIMPLIFIED = str.maketrans(FALLBACK_T2S_PAIRS)
+FALLBACK_SIMPLIFIED_TO_TRADITIONAL = str.maketrans({
+    simplified: traditional
+    for traditional, simplified in FALLBACK_T2S_PAIRS.items()
+})
+
 
 @dataclass
 class ASRUtterance:
@@ -130,7 +205,34 @@ def normalize_text(t: str) -> str:
     return t
 
 
-def clean_text(text: str, remove_fillers: bool = True) -> str:
+@lru_cache(maxsize=4)
+def _opencc_converter(config: str):
+    try:
+        from opencc import OpenCC
+    except Exception:
+        return None
+    try:
+        return OpenCC(config)
+    except Exception:
+        return None
+
+
+def normalize_chinese_variant(text: str, variant: str = "simplified") -> str:
+    if variant == "original":
+        return text
+    if variant == "traditional":
+        converter = _opencc_converter("s2t")
+        if converter is not None:
+            return converter.convert(text)
+        return text.translate(FALLBACK_SIMPLIFIED_TO_TRADITIONAL)
+
+    converter = _opencc_converter("t2s")
+    if converter is not None:
+        return converter.convert(text)
+    return text.translate(FALLBACK_TRADITIONAL_TO_SIMPLIFIED)
+
+
+def clean_text(text: str, remove_fillers: bool = True, chinese_variant: str = "simplified") -> str:
     t = normalize_text(text)
     if not t:
         return t
@@ -146,7 +248,8 @@ def clean_text(text: str, remove_fillers: bool = True) -> str:
 
     t = re.sub(r"\s+", " ", t)
     t = re.sub(r"([，。！？；：]){2,}", r"\1", t)
-    return t.strip(" ，。！？；：")
+    t = t.strip(" ，。！？；：")
+    return normalize_chinese_variant(t, chinese_variant)
 
 
 def _coerce_timestamps(item) -> Tuple[float, float]:
@@ -163,7 +266,7 @@ def _coerce_timestamps(item) -> Tuple[float, float]:
     return float(start), float(end)
 
 
-def _merge_consecutive(chunks: List[ASRUtterance], gap: float = 0.25) -> List[ASRUtterance]:
+def _merge_consecutive(chunks: List[ASRUtterance], gap: float = 0.25, chinese_variant: str = "simplified") -> List[ASRUtterance]:
     if not chunks:
         return chunks
     chunks = sorted(chunks, key=lambda x: x.start)
@@ -173,7 +276,7 @@ def _merge_consecutive(chunks: List[ASRUtterance], gap: float = 0.25) -> List[AS
         same_speaker = u.speaker == last.speaker
         close_gap = (u.start - last.end) <= gap
         if same_speaker and close_gap:
-            cand = clean_text(f"{last.text} {u.text}")
+            cand = clean_text(f"{last.text} {u.text}", chinese_variant=chinese_variant)
             if len(cand) <= 400:
                 last.text = cand
                 last.end = max(last.end, u.end)
@@ -612,6 +715,7 @@ def parse_args():
     ap.add_argument("--hf-token", default=None, help="HF token")
     ap.add_argument("--offline", action="store_true", help="强制离线")
     ap.add_argument("--keep-fillers", action="store_true", help="保留口语词，不做清洗")
+    ap.add_argument("--chinese-variant", default="simplified", choices=["simplified", "traditional", "original"], help="中文输出字形")
     ap.add_argument("--json", default=None, help="导出 JSON")
     return ap.parse_args()
 
@@ -656,8 +760,12 @@ def main() -> None:
         asr_chunks = extract_chunks(raw_result)
 
     for chunk in asr_chunks:
-        chunk.text = clean_text(chunk.text, remove_fillers=not args.keep_fillers)
-    asr_chunks = _dedup_chunks(_merge_consecutive(asr_chunks))
+        chunk.text = clean_text(
+            chunk.text,
+            remove_fillers=not args.keep_fillers,
+            chinese_variant=args.chinese_variant,
+        )
+    asr_chunks = _dedup_chunks(_merge_consecutive(asr_chunks, chinese_variant=args.chinese_variant))
 
     speaker_spans = []
     if args.diarize:

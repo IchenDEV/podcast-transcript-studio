@@ -54,12 +54,6 @@ struct ContentView: View {
         }
         .background(backgroundLayer)
         .background(WindowGlassConfigurator())
-        .overlay(alignment: .top) {
-            if viewModel.isRunningJob {
-                runningBanner
-                    .padding(.top, 14)
-            }
-        }
         .fileImporter(
             isPresented: $showingImporter,
             allowedContentTypes: [.audio, .movie, .mpeg4Movie, .mpeg4Audio],
@@ -122,13 +116,15 @@ struct ContentView: View {
             }
         }
 
-        ToolbarItem(placement: .principal) {
-            DetailModeSegmentedControl(selection: $transcriptMode)
-            .disabled(selectedPanel != .result || viewModel.selectedJob == nil)
-        }
+        if selectedPanel == .result {
+            ToolbarItem(placement: .principal) {
+                DetailModeSegmentedControl(selection: $transcriptMode)
+                    .disabled(viewModel.selectedJob == nil)
+            }
 
-        ToolbarItem(placement: .primaryAction) {
-            exportToolbarMenu
+            ToolbarItem(placement: .primaryAction) {
+                exportToolbarMenu
+            }
         }
     }
 
@@ -148,23 +144,6 @@ struct ContentView: View {
         }
         .menuStyle(.button)
         .disabled(viewModel.selectedJob == nil || viewModel.isRunningJob)
-    }
-
-    private var runningBanner: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-            Text("正在本地转写")
-                .font(.callout.weight(.medium))
-            Text("请保持应用打开")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.separator.opacity(0.36)))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.24 : 0.08), radius: 12, y: 5)
     }
 
     private func export(_ format: ExportFormat) {

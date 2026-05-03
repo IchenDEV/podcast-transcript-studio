@@ -11,7 +11,7 @@ struct JobDetailView: View {
         Group {
             if let job = viewModel.selectedJob {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         jobHeader(job)
 
                         if !job.transcriptSections.isEmpty {
@@ -230,8 +230,8 @@ struct JobDetailView: View {
             Divider()
 
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(section.segments) { segment in
-                    transcriptSegment(segment)
+                ForEach(Array(section.segments.enumerated()), id: \.element.id) { index, segment in
+                    transcriptSegment(segment, rowNumber: index + 1)
                     if segment.id != section.segments.last?.id {
                         Divider().padding(.leading, 74)
                     }
@@ -241,10 +241,12 @@ struct JobDetailView: View {
         .systemGroupedPanel()
     }
 
-    private func transcriptSegment(_ segment: TranscriptSegment) -> some View {
+    private func transcriptSegment(_ segment: TranscriptSegment, rowNumber: Int) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            speakerMark(segment.speaker)
-                .padding(.top, 2)
+            Text("\(rowNumber)")
+                .font(.subheadline.monospacedDigit().weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .center)
 
             Text(viewModel.displayName(for: segment.speaker))
                 .font(.subheadline.weight(.medium))
@@ -280,12 +282,22 @@ struct JobDetailView: View {
 
             Divider()
 
-            Text(rawTranscriptText(job))
-                .font(.subheadline)
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(job.transcriptSections) { section in
+                    ForEach(section.segments) { segment in
+                        Text(segment.text)
+                            .font(.subheadline)
+                            .lineSpacing(4)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                        if segment.id != section.segments.last?.id {
+                            Divider().padding(.leading, 18)
+                        }
+                    }
+                }
+            }
         }
         .systemGroupedPanel()
     }
@@ -299,9 +311,16 @@ struct JobDetailView: View {
             Text(job.status == .running ? "正在生成稿件" : "暂无转写结果")
                 .font(.headline)
 
-            Text(job.status == .running ? "完成后会在这里显示时间轴和说话人。" : "任务完成后会显示可选择、可导出的文本。")
+            Text(job.progressMessage ?? (job.status == .running ? "完成后会在这里显示时间轴和说话人。" : "任务完成后会显示可选择、可导出的文本。"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            if job.status == .running {
+                ProgressView(value: job.progress)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: 260)
+                    .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 72)
@@ -345,13 +364,6 @@ struct JobDetailView: View {
 
     private var metricFill: Color {
         colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.50)
-    }
-
-    private func rawTranscriptText(_ job: TranscriptionJob) -> String {
-        job.transcriptSections
-            .flatMap(\.segments)
-            .map(\.text)
-            .joined(separator: "\n\n")
     }
 
     private func statusTitle(_ status: JobStatus) -> String {
