@@ -16,10 +16,30 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains(source.path))
         XCTAssertTrue(command.arguments.contains("--preset"))
         XCTAssertTrue(command.arguments.contains("balanced"))
+        XCTAssertTrue(command.arguments.contains("--chinese-variant"))
+        XCTAssertTrue(command.arguments.contains("simplified"))
         XCTAssertTrue(command.environment["PODCAST_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.environment["PODCAST_BUNDLED_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.outputTextURL.path.contains(job.id.uuidString))
         XCTAssertEqual(command.environment["PODCAST_TEXT_MODEL_REPOSITORY"], "Qwen/Qwen3-0.6B")
+    }
+
+    func test_command_builder_passes_selected_chinese_variant() throws {
+        let config = AppConfiguration(
+            baseDirectory: URL(fileURLWithPath: "/tmp/PodcastTranscriptStudio"),
+            bundledResourcesDirectory: URL(fileURLWithPath: "/tmp/PodcastTranscriptStudio/BundledResources"),
+            overrides: AppConfigurationOverrides(chineseTextVariant: .traditional)
+        )
+
+        let command = try WorkerCommandBuilder(configuration: config).makeCommand(
+            job: TranscriptionJob(filename: "demo.m4a"),
+            sourceURL: URL(fileURLWithPath: "/tmp/input/demo.m4a"),
+            diarize: true,
+            cleanFillers: true
+        )
+
+        let argumentIndex = try XCTUnwrap(command.arguments.firstIndex(of: "--chinese-variant"))
+        XCTAssertEqual(command.arguments[argumentIndex + 1], "traditional")
     }
 
     func test_command_builder_uses_local_models_when_available() throws {

@@ -244,6 +244,19 @@ private struct JobRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+
+                if job.status == .running {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ProgressView(value: job.progress)
+                            .progressViewStyle(.linear)
+                        if let progressMessage = job.progressMessage {
+                            Text(progressMessage)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
             }
 
             Spacer(minLength: 0)

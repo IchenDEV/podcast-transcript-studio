@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var exportsDirectoryPath = ""
     @State private var logsDirectoryPath = ""
     @State private var modelsDirectoryPath = ""
+    @State private var chineseTextVariant: ChineseTextVariant = .simplified
     @State private var huggingFaceToken = ""
     @State private var settingsMessage: String?
     @State private var folderTarget: FolderTarget?
@@ -23,6 +24,8 @@ struct SettingsView: View {
                 iconSection
 
                 modelSection
+
+                transcriptTextSection
 
                 SettingsGroup(title: "数据目录", icon: "folder") {
                     EditablePathRow(
@@ -213,16 +216,43 @@ struct SettingsView: View {
         }
     }
 
+    private var transcriptTextSection: some View {
+        SettingsGroup(title: "转写文本", icon: "textformat") {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("中文输出")
+                            .font(.callout.weight(.medium))
+                        Text("默认使用简体中文。需要繁体或保留模型原文时可以切换。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                Picker("中文输出", selection: $chineseTextVariant) {
+                    ForEach(ChineseTextVariant.allCases) { variant in
+                        Text(variant.settingsTitle).tag(variant)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(chineseTextVariant.settingsDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+        }
+    }
+
     private var runtimeSection: some View {
         SettingsGroup(title: "运行时", icon: "gearshape.2") {
-            DisclosureGroup(isExpanded: $showRuntimeDetails) {
-                VStack(spacing: 0) {
-                    Divider()
-                    SettingsPathRow(title: "Python Runtime", value: viewModel.configuration.runtimeDirectory.path, icon: "curlybraces")
-                    Divider()
-                    SettingsPathRow(title: "脚本目录", value: viewModel.configuration.scriptsDirectory.path, icon: "terminal")
-                    Divider()
-                    SettingsPathRow(title: "内置模型目录", value: viewModel.configuration.bundledModelsDirectory.path, icon: "archivebox")
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    showRuntimeDetails.toggle()
                 }
             } label: {
                 HStack(spacing: 12) {
@@ -235,9 +265,28 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .rotationEffect(.degrees(showRuntimeDetails ? 90 : 0))
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if showRuntimeDetails {
+                VStack(spacing: 0) {
+                    Divider()
+                    SettingsPathRow(title: "Python Runtime", value: viewModel.configuration.runtimeDirectory.path, icon: "curlybraces")
+                    Divider()
+                    SettingsPathRow(title: "脚本目录", value: viewModel.configuration.scriptsDirectory.path, icon: "terminal")
+                    Divider()
+                    SettingsPathRow(title: "内置模型目录", value: viewModel.configuration.bundledModelsDirectory.path, icon: "archivebox")
+                }
+                .transition(.opacity)
             }
         }
     }
@@ -298,6 +347,7 @@ struct SettingsView: View {
         exportsDirectoryPath = viewModel.configuration.exportsDirectory.path
         logsDirectoryPath = viewModel.configuration.logsDirectory.path
         modelsDirectoryPath = viewModel.configuration.modelsDirectory.path
+        chineseTextVariant = viewModel.configuration.chineseTextVariant
     }
 
     private func saveSettings() {
@@ -306,7 +356,8 @@ struct SettingsView: View {
                 jobsDirectoryPath: normalizedDirectoryPath(jobsDirectoryPath),
                 exportsDirectoryPath: normalizedDirectoryPath(exportsDirectoryPath),
                 logsDirectoryPath: normalizedDirectoryPath(logsDirectoryPath),
-                modelsDirectoryPath: normalizedDirectoryPath(modelsDirectoryPath)
+                modelsDirectoryPath: normalizedDirectoryPath(modelsDirectoryPath),
+                chineseTextVariant: chineseTextVariant
             )
             try viewModel.updateConfiguration(overrides: overrides)
             settingsMessage = "配置已保存"
@@ -670,5 +721,29 @@ private struct SettingsIcon: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.35))
         )
+    }
+}
+
+private extension ChineseTextVariant {
+    var settingsTitle: String {
+        switch self {
+        case .simplified:
+            "简体中文"
+        case .traditional:
+            "繁体中文"
+        case .original:
+            "保留原文"
+        }
+    }
+
+    var settingsDetail: String {
+        switch self {
+        case .simplified:
+            "适合大陆用户，繁体字会转成简体。"
+        case .traditional:
+            "适合繁体中文稿件，简体字会转成繁体。"
+        case .original:
+            "不做简繁转换，保留模型输出。"
+        }
     }
 }

@@ -114,3 +114,19 @@ def test_qwen_refiner_rejects_large_sentence_rewrites():
 
     assert result.speaker_display_names == {'说话人1': '张三'}
     assert result.corrected_texts == {}
+
+
+def test_clean_text_defaults_to_simplified_chinese():
+    from packages.python_worker.text_cleanup import clean_text
+
+    cleaned = clean_text('開始體驗臺灣節目')
+
+    assert cleaned == '开始体验台湾节目'
+
+
+def test_clean_text_can_keep_traditional_chinese():
+    from packages.python_worker.text_cleanup import clean_text
+
+    cleaned = clean_text('開始體驗臺灣節目', chinese_variant='traditional')
+
+    assert cleaned == '開始體驗臺灣節目'

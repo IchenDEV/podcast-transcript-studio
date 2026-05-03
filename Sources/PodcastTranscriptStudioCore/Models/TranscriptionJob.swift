@@ -43,6 +43,8 @@ public struct TranscriptionJob: Identifiable, Codable, Equatable, Sendable {
     public var transcriptPath: URL?
     public var logPath: URL?
     public var errorMessage: String?
+    public var progress: Double?
+    public var progressMessage: String?
     public var transcriptSections: [TranscriptSection]
     public var speakerDisplayNames: [String: String]
 
@@ -54,6 +56,8 @@ public struct TranscriptionJob: Identifiable, Codable, Equatable, Sendable {
         transcriptPath: URL? = nil,
         logPath: URL? = nil,
         errorMessage: String? = nil,
+        progress: Double? = nil,
+        progressMessage: String? = nil,
         transcriptSections: [TranscriptSection] = [],
         speakerDisplayNames: [String: String] = [:]
     ) {
@@ -64,6 +68,8 @@ public struct TranscriptionJob: Identifiable, Codable, Equatable, Sendable {
         self.transcriptPath = transcriptPath
         self.logPath = logPath
         self.errorMessage = errorMessage
+        self.progress = progress
+        self.progressMessage = progressMessage
         self.transcriptSections = transcriptSections
         self.speakerDisplayNames = speakerDisplayNames
     }

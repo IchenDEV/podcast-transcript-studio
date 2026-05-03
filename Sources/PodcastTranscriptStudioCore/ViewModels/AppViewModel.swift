@@ -10,18 +10,21 @@ public final class AppViewModel: ObservableObject {
     private var exporter: TranscriptExporter
     private var coordinator: TranscriptionCoordinator
     private var repository: JobStoreRepository
+    private var podcastImporter: PodcastAudioImporting
 
     public init(
         jobStore: JobStore = JobStore(),
         configuration: AppConfiguration = .preview(baseDirectory: URL(fileURLWithPath: NSHomeDirectory())),
         coordinator: TranscriptionCoordinator? = nil,
-        repository: JobStoreRepository? = nil
+        repository: JobStoreRepository? = nil,
+        podcastImporter: PodcastAudioImporting? = nil
     ) {
         self.jobStore = jobStore
         self.configuration = configuration
         self.exporter = TranscriptExporter(configuration: configuration)
         self.repository = repository ?? JobStoreRepository(configuration: configuration)
         self.coordinator = coordinator ?? TranscriptionCoordinator(configuration: configuration, jobStore: jobStore)
+        self.podcastImporter = podcastImporter ?? PodcastAudioImporter(configuration: configuration)
     }
 
     public var selectedJob: TranscriptionJob? {
@@ -58,11 +61,29 @@ public final class AppViewModel: ObservableObject {
     public func startTranscription(sourceURL: URL, diarize: Bool = true, cleanFillers: Bool = true) async throws {
         isRunningJob = true
         defer { isRunningJob = false }
+        let job = TranscriptionJob(
+            filename: sourceURL.lastPathComponent,
+            status: .running,
+            progress: 0.05,
+            progressMessage: "等待转写"
+        )
+        jobStore.upsert(job)
+        selectedJobID = job.id
+        objectWillChange.send()
+        try? persistJobs()
+
         do {
-            let job = try await coordinator.startTranscription(sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
-            selectedJobID = job.id
+            updateJobProgress(job.id, progress: nil, message: "本地转写中")
+            _ = try await coordinator.startTranscription(
+                sourceURL: sourceURL,
+                jobID: job.id,
+                diarize: diarize,
+                cleanFillers: cleanFillers
+            )
+            objectWillChange.send()
             try persistJobs()
         } catch {
+            objectWillChange.send()
             try? persistJobs()
             throw error
         }
@@ -71,13 +92,32 @@ public final class AppViewModel: ObservableObject {
     public func startTranscription(podcastURL: URL, diarize: Bool = true, cleanFillers: Bool = true) async throws {
         isRunningJob = true
         defer { isRunningJob = false }
+        let job = TranscriptionJob(
+            filename: podcastDisplayName(for: podcastURL),
+            status: .running,
+            progress: 0.08,
+            progressMessage: "解析链接"
+        )
+        jobStore.upsert(job)
+        selectedJobID = job.id
+        objectWillChange.send()
+        try? persistJobs()
+
         do {
-            let importer = PodcastAudioImporter(configuration: configuration)
-            let sourceURL = try await importer.importAudio(from: podcastURL)
-            let job = try await coordinator.startTranscription(sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
-            selectedJobID = job.id
+            updateJobProgress(job.id, progress: 0.18, message: "下载音频")
+            let sourceURL = try await podcastImporter.importAudio(from: podcastURL)
+            jobStore.updateFilename(for: job.id, filename: sourceURL.lastPathComponent)
+            updateJobProgress(job.id, progress: nil, message: "本地转写中")
+            _ = try await coordinator.startTranscription(
+                sourceURL: sourceURL,
+                jobID: job.id,
+                diarize: diarize,
+                cleanFillers: cleanFillers
+            )
+            objectWillChange.send()
             try persistJobs()
         } catch {
+            markJobFailed(job.id, message: error.localizedDescription)
             try? persistJobs()
             throw error
         }
@@ -134,9 +174,34 @@ public final class AppViewModel: ObservableObject {
         self.exporter = TranscriptExporter(configuration: configuration)
         self.repository = JobStoreRepository(configuration: configuration)
         self.coordinator = TranscriptionCoordinator(configuration: configuration, jobStore: jobStore)
+        self.podcastImporter = PodcastAudioImporter(configuration: configuration)
         try FileManager.default.createDirectory(at: configuration.jobsDirectory, withIntermediateDirectories: true, attributes: nil)
         try FileManager.default.createDirectory(at: configuration.exportsDirectory, withIntermediateDirectories: true, attributes: nil)
         try FileManager.default.createDirectory(at: configuration.logsDirectory, withIntermediateDirectories: true, attributes: nil)
+    }
+
+    private func updateJobProgress(_ jobID: UUID, progress: Double?, message: String?) {
+        jobStore.updateProgress(for: jobID, progress: progress, message: message)
+        objectWillChange.send()
+        try? persistJobs()
+    }
+
+    private func markJobFailed(_ jobID: UUID, message: String) {
+        guard var failed = jobStore.job(id: jobID) else { return }
+        failed.status = .failed
+        failed.errorMessage = message
+        failed.progress = nil
+        failed.progressMessage = nil
+        jobStore.upsert(failed)
+        objectWillChange.send()
+    }
+
+    private func podcastDisplayName(for url: URL) -> String {
+        if let host = url.host, !host.isEmpty {
+            return host
+        }
+        let pathName = url.lastPathComponent
+        return pathName.isEmpty ? "播客链接" : pathName
     }
 }
 

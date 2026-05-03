@@ -49,6 +49,40 @@ final class TranscriptionCoordinatorTests: XCTestCase {
             }
         }
     }
+
+    func test_start_transcription_reuses_existing_job_for_podcast_download() async throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let configuration = AppConfiguration.preview(baseDirectory: base)
+        let store = JobStore()
+        let existing = TranscriptionJob(
+            filename: "podcast.example.com",
+            status: .running,
+            progress: 0.2,
+            progressMessage: "下载音频"
+        )
+        store.upsert(existing)
+        let runner = FakeWorkerRunner { command in
+            XCTAssertTrue(command.outputTextURL.path.contains(existing.id.uuidString))
+            try FileManager.default.createDirectory(at: command.outputTextURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try "【分节1】\n\n[00:00:00.000 - 00:00:02.000] 说话人1: 已下载内容\n".write(to: command.outputTextURL, atomically: true, encoding: .utf8)
+            try "{}".write(to: command.outputJSONURL, atomically: true, encoding: .utf8)
+        }
+        let coordinator = TranscriptionCoordinator(configuration: configuration, jobStore: store, runner: runner)
+
+        let job = try await coordinator.startTranscription(
+            sourceURL: URL(fileURLWithPath: "/tmp/downloaded-audio.m4a"),
+            jobID: existing.id
+        )
+
+        XCTAssertEqual(job.id, existing.id)
+        XCTAssertEqual(store.jobs.count, 1)
+        XCTAssertEqual(store.jobs[0].id, existing.id)
+        XCTAssertEqual(store.jobs[0].filename, "downloaded-audio.m4a")
+        XCTAssertEqual(store.jobs[0].status, .completed)
+        XCTAssertNil(store.jobs[0].progress)
+        XCTAssertNil(store.jobs[0].progressMessage)
+        XCTAssertEqual(store.jobs[0].transcriptSections.first?.segments.first?.text, "已下载内容")
+    }
 }
 
 private enum FakeWorkerError: Error, LocalizedError {
