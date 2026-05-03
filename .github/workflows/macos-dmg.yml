@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements-worker.txt
+          cache-dependency-path: requirements-worker.lock
 
       - name: Select build version
         env:
@@ -67,7 +67,7 @@ jobs:
           python -m pip install --upgrade pip
           rm -rf "$PYTHON_SITE_PACKAGES_SRC"
           mkdir -p "$PYTHON_SITE_PACKAGES_SRC"
-          python -m pip install --target "$PYTHON_SITE_PACKAGES_SRC" -r requirements-worker.txt
+          python -m pip install --target "$PYTHON_SITE_PACKAGES_SRC" -r requirements-worker.lock
 
       - name: Package model assets
         if: env.HF_TOKEN != ''

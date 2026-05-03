@@ -23,7 +23,7 @@ Podcast Transcript Studio 是一个本地优先的播客转写工具。项目提
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-dev.lock
 ```
 
 ```bash
@@ -114,10 +114,16 @@ python Sources/PodcastTranscriptStudioCore/Resources/Scripts/download_models.py 
 worker 推理依赖体积较大，需要时再安装：
 
 ```bash
-python -m pip install -r requirements-worker.txt
+python -m pip install -r requirements-worker.lock
 ```
 
-worker 推理依赖建议使用 Python 3.10 到 3.12。
+`requirements*.txt` 保留宽松版本范围，适合主动升级依赖；`requirements*.lock` 固定当前验证过的版本，适合日常开发、测试和打包。worker 推理依赖建议使用 Python 3.10 到 3.12。
+
+## 许可
+
+项目源代码使用 MIT License，见 `LICENSE`。
+
+模型和第三方依赖有各自的许可与访问条件。默认 ASR 使用 `openai/whisper-tiny`；多说话人能力使用 pyannote 系列模型；文本后处理可使用 `Qwen/Qwen3-0.6B`。打包或重新分发带模型的版本前，请先阅读 `NOTICE.md` 和对应模型卡。
 
 ## 文档
 

@@ -64,7 +64,7 @@ PYTHON_BIN=.worker-venv/bin/python \
 ```bash
 python3.11 -m venv .worker-venv
 .worker-venv/bin/python -m pip install --upgrade pip
-.worker-venv/bin/python -m pip install -r requirements-worker.txt
+.worker-venv/bin/python -m pip install -r requirements-worker.lock
 ```
 
 ## 构建 `.dmg`
@@ -109,6 +109,8 @@ PodcastTranscriptStudio-<version>-macOS
 如果仓库配置了 `HF_TOKEN` secret，workflow 会先从 Hugging Face 下载模型并执行 `scripts/package_models.sh`，再构建 DMG。没有 `HF_TOKEN` 时，workflow 仍会构建不含模型资源的 DMG。
 
 如果是 tag 触发，workflow 还会把 DMG 和 `.sha256` 文件上传到对应 GitHub Release。
+
+worker 依赖安装默认使用 `requirements-worker.lock`。需要升级依赖时，先更新 `requirements-worker.txt`，验证后再刷新 lock 文件。
 
 ## 测试
 

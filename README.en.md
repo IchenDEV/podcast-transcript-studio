@@ -23,7 +23,7 @@ The web entrypoint is the recommended first path.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-dev.lock
 ```
 
 ```bash
@@ -114,10 +114,16 @@ python Sources/PodcastTranscriptStudioCore/Resources/Scripts/download_models.py 
 Install worker inference dependencies only when needed:
 
 ```bash
-python -m pip install -r requirements-worker.txt
+python -m pip install -r requirements-worker.lock
 ```
 
-Python 3.10 to 3.12 is recommended for worker inference dependencies.
+`requirements*.txt` keeps flexible version ranges for dependency upgrades. `requirements*.lock` pins the currently verified versions for daily development, tests, and packaging. Python 3.10 to 3.12 is recommended for worker inference dependencies.
+
+## License
+
+The project source code is released under the MIT License. See `LICENSE`.
+
+Models and third-party dependencies keep their own licenses and access terms. The default ASR model is `openai/whisper-tiny`; speaker diarization uses pyannote models; text refinement can use `Qwen/Qwen3-0.6B`. Before packaging or redistributing builds with bundled models, review `NOTICE.md` and the upstream model cards.
 
 ## Documentation
 
