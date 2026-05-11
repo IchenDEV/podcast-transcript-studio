@@ -26,7 +26,8 @@ public final class TranscriptionCoordinator {
         sourceURL: URL,
         jobID: UUID? = nil,
         diarize: Bool = true,
-        cleanFillers: Bool = true
+        cleanFillers: Bool = true,
+        mode: TranscriptionMode = .standard
     ) async throws -> TranscriptionJob {
         var job = jobID.flatMap { jobStore.job(id: $0) }
             ?? TranscriptionJob(id: jobID ?? UUID(), filename: sourceURL.lastPathComponent, status: .queued)
@@ -38,7 +39,13 @@ public final class TranscriptionCoordinator {
         jobStore.updateStatus(for: job.id, status: .running)
         jobStore.updateProgress(for: job.id, progress: nil, message: "本地转写中")
 
-        let command = try commandBuilder.makeCommand(job: job, sourceURL: sourceURL, diarize: diarize, cleanFillers: cleanFillers)
+        let command = try commandBuilder.makeCommand(
+            job: job,
+            sourceURL: sourceURL,
+            diarize: diarize,
+            cleanFillers: cleanFillers,
+            mode: mode
+        )
 
         do {
             try await runner.run(command: command)

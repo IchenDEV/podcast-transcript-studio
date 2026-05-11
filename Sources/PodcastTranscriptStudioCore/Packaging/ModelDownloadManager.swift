@@ -39,7 +39,7 @@ public struct ModelDownloadManager: Sendable {
     public let configuration: AppConfiguration
     public let assets: [ModelAsset]
 
-    public init(configuration: AppConfiguration, assets: [ModelAsset] = ModelAssets.required) {
+    public init(configuration: AppConfiguration, assets: [ModelAsset] = ModelAssets.all) {
         self.configuration = configuration
         self.assets = assets
     }
@@ -53,11 +53,51 @@ public struct ModelDownloadManager: Sendable {
                     FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
                 }
             }
-            return ModelAssetStatus(
-                asset: asset,
-                directory: installedDirectory ?? primaryDirectory,
-                isInstalled: installedDirectory != nil
-            )
+            let availability: ModelAssetAvailability
+            if installedDirectory == nil {
+                availability = .missingModel
+            } else if !arePythonModulesAvailable(asset.requiredPythonModules) {
+                availability = .missingDependency
+            } else {
+                availability = .available
+            }
+
+            return ModelAssetStatus(asset: asset, directory: installedDirectory ?? primaryDirectory, availability: availability)
+        }
+    }
+
+    private func arePythonModulesAvailable(_ modules: [String]) -> Bool {
+        guard !modules.isEmpty else { return true }
+
+        let pythonRuntime = configuration.resolvedPythonRuntime()
+        let executable = pythonRuntime?.executableURL.path ?? "/usr/bin/python3"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = [
+            "-c",
+            """
+            import importlib.util, sys
+            missing = [name for name in sys.argv[1:] if importlib.util.find_spec(name) is None]
+            raise SystemExit(1 if missing else 0)
+            """,
+        ] + modules
+
+        var environment = ProcessInfo.processInfo.environment
+        if let pythonRuntime {
+            for (key, value) in pythonRuntime.environment {
+                environment[key] = value
+            }
+        }
+        process.environment = environment
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
         }
     }
 

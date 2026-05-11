@@ -8,12 +8,19 @@ import sys
 from pathlib import Path
 
 
-MODELS = [
+REQUIRED_MODELS = [
     ("openai/whisper-tiny", "whisper-tiny", ["config.json", "pytorch_model.bin"]),
     ("pyannote/speaker-diarization-3.1", "speaker-diarization-3.1", ["config.yaml"]),
     ("pyannote/segmentation-3.0", "segmentation-3.0", ["config.yaml", "pytorch_model.bin"]),
     ("pyannote/wespeaker-voxceleb-resnet34-LM", "wespeaker-voxceleb-resnet34-LM", ["config.yaml", "pytorch_model.bin"]),
     ("Qwen/Qwen3-0.6B", "Qwen3-0.6B", ["config.json", "model.safetensors", "tokenizer.json"]),
+]
+
+LOCAL_ASR_MODELS = [
+    ("Qwen/Qwen3-ASR-1.7B", "Qwen3-ASR-1.7B", ["config.json"]),
+    ("Qwen/Qwen3-ForcedAligner-0.6B", "Qwen3-ForcedAligner-0.6B", ["config.json"]),
+    ("XiaomiMiMo/MiMo-V2.5-ASR", "MiMo-V2.5-ASR", ["config.json"]),
+    ("XiaomiMiMo/MiMo-Audio-Tokenizer", "MiMo-Audio-Tokenizer", ["config.json"]),
 ]
 
 
@@ -60,11 +67,12 @@ def patch_diarization_config(models_dir: Path) -> None:
     config_path.write_text(text, encoding="utf-8")
 
 
-def download_models(models_dir: Path, token: str | None) -> None:
+def download_models(models_dir: Path, token: str | None, include_local_asr: bool = False) -> None:
     snapshot_download = require_huggingface_hub()
     models_dir.mkdir(parents=True, exist_ok=True)
 
-    for repo_id, directory_name, required_files in MODELS:
+    model_specs = REQUIRED_MODELS + (LOCAL_ASR_MODELS if include_local_asr else [])
+    for repo_id, directory_name, required_files in model_specs:
         print(f"下载 {repo_id}", flush=True)
         snapshot_path = Path(snapshot_download(repo_id=repo_id, token=token))
         target_path = models_dir / directory_name
@@ -79,11 +87,12 @@ def download_models(models_dir: Path, token: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download models for Podcast Transcript Studio.")
     parser.add_argument("--models-dir", required=True, help="模型输出目录")
+    parser.add_argument("--include-local-asr", action="store_true", help="同时下载 Qwen3-ASR 和 MiMo-V2.5-ASR 模型")
     args = parser.parse_args()
 
     token = os.environ.get("HF_TOKEN") or None
     try:
-        download_models(Path(args.models_dir).expanduser().resolve(), token)
+        download_models(Path(args.models_dir).expanduser().resolve(), token, include_local_asr=args.include_local_asr)
     except Exception as exc:
         print(f"模型下载失败：{exc}", file=sys.stderr)
         raise SystemExit(1) from exc

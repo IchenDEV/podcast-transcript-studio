@@ -123,7 +123,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("模型状态")
                                 .font(.headline)
-                            Text("Whisper 负责转写，pyannote 负责说话人识别。")
+                            Text("Whisper 是基础转写，Qwen3 和 MiMo 是可选高质量 ASR。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -588,7 +588,7 @@ private struct ModelStatusCard: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(statusColor.opacity(colorScheme == .dark ? 0.16 : 0.10))
-                Image(systemName: status.isInstalled ? "checkmark" : "arrow.down")
+                Image(systemName: statusIcon)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(statusColor)
             }
@@ -600,7 +600,7 @@ private struct ModelStatusCard: View {
                         .font(.callout.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    Text(status.isInstalled ? "可用" : "未下载")
+                    Text(statusLabel)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(statusColor)
                         .padding(.horizontal, 7)
@@ -641,13 +641,52 @@ private struct ModelStatusCard: View {
             "分段模型"
         case "wespeaker-voxceleb-resnet34-LM":
             "声纹模型"
+        case "Qwen3-ASR-1.7B":
+            "Qwen3 ASR"
+        case "Qwen3-ForcedAligner-0.6B":
+            "Qwen3 时间戳"
+        case "MiMo-V2.5-ASR":
+            "MiMo ASR"
+        case "MiMo-Audio-Tokenizer":
+            "MiMo Tokenizer"
+        case "MiMo-V2.5-ASR-source":
+            "MiMo 源码"
         default:
             status.asset.directoryName
         }
     }
 
+    private var statusLabel: String {
+        switch status.availability {
+        case .available:
+            "可用"
+        case .missingDependency:
+            "缺依赖"
+        case .missingModel:
+            status.asset.isOptional ? "未安装" : "未下载"
+        }
+    }
+
+    private var statusIcon: String {
+        switch status.availability {
+        case .available:
+            "checkmark"
+        case .missingDependency:
+            "exclamationmark.triangle"
+        case .missingModel:
+            "arrow.down"
+        }
+    }
+
     private var statusColor: Color {
-        status.isInstalled ? .green : .secondary
+        switch status.availability {
+        case .available:
+            .green
+        case .missingDependency:
+            .orange
+        case .missingModel:
+            .secondary
+        }
     }
 }
 

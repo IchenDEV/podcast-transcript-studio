@@ -12,6 +12,7 @@ struct SidebarView: View {
     @Binding var selectedPanel: DetailPanel
     @Binding var diarize: Bool
     @Binding var cleanFillers: Bool
+    @Binding var transcriptionMode: TranscriptionMode
     let onImportAudio: () -> Void
     let onImportPodcast: () -> Void
 
@@ -105,6 +106,23 @@ struct SidebarView: View {
                 SidebarActionRow(title: "清理文本", icon: "wand.and.sparkles", isOn: cleanFillers)
             }
             .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("转写模式")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+
+                Picker("转写模式", selection: $transcriptionMode) {
+                    ForEach(TranscriptionMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            .padding(.horizontal, 8)
         }
     }
 

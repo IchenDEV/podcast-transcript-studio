@@ -40,7 +40,9 @@ python -m uvicorn podcast_web.app:app --reload
 
 ## 模型文件
 
-默认 ASR 模型为 `openai/whisper-tiny`。多说话人能力依赖 pyannote 相关模型，其中部分模型需要 Hugging Face 登录和模型许可。
+默认 ASR 模型为 `openai/whisper-tiny`。高质量模式会优先尝试本地 Qwen3-ASR；本地依赖或模型不可用时会回退到 Whisper。MiMo-V2.5-ASR 作为可选本地 ASR，可以通过 worker 参数手动启用。
+
+多说话人能力依赖 pyannote 相关模型，其中部分模型需要 Hugging Face 登录和模型许可。
 
 本地模型资源目录：
 
@@ -49,6 +51,20 @@ python -m uvicorn podcast_web.app:app --reload
 ```
 
 macOS app 的设置页可以修改模型目录，并直接下载所需模型。需要使用多说话人能力时，先在 Hugging Face 接受 pyannote 相关模型许可，再在设置页填写 token。
+
+Qwen3-ASR / MiMo-V2.5-ASR 的依赖较重，不在默认 worker 依赖里。需要本地高质量 ASR 时，先安装可选依赖：
+
+```bash
+python -m pip install -r requirements-local-asr.txt
+```
+
+如需下载 Qwen3-ASR 和 MiMo-V2.5-ASR 权重，可执行：
+
+```bash
+python Sources/PodcastTranscriptStudioCore/Resources/Scripts/download_models.py \
+  --models-dir "$HOME/Library/Application Support/PodcastTranscriptStudio/Models" \
+  --include-local-asr
+```
 
 如果需要把模型一起放进 DMG，可以先在本机完成 Hugging Face 登录和模型许可，再执行 `./scripts/package_models.sh`。该脚本会把模型复制到：
 

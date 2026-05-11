@@ -40,7 +40,9 @@ URL import only handles publicly accessible audio pages, RSS feeds, and direct a
 
 ## Model Files
 
-The default ASR model is `openai/whisper-tiny`. Speaker diarization depends on pyannote models, and some of those models require Hugging Face authentication and model access approval.
+The default ASR model is `openai/whisper-tiny`. High quality mode tries local Qwen3-ASR first and falls back to Whisper when the local runtime or model files are unavailable. MiMo-V2.5-ASR is available as an optional local ASR provider through worker flags.
+
+Speaker diarization depends on pyannote models, and some of those models require Hugging Face authentication and model access approval.
 
 Local model resource directory:
 
@@ -49,6 +51,20 @@ Local model resource directory:
 ```
 
 The macOS settings view can change the model directory and download the required models. For speaker diarization, accept the required pyannote model licenses on Hugging Face first, then paste a token in the settings view.
+
+Qwen3-ASR and MiMo-V2.5-ASR need heavier optional dependencies. Install them only for local high quality ASR:
+
+```bash
+python -m pip install -r requirements-local-asr.txt
+```
+
+To download Qwen3-ASR and MiMo-V2.5-ASR weights:
+
+```bash
+python Sources/PodcastTranscriptStudioCore/Resources/Scripts/download_models.py \
+  --models-dir "$HOME/Library/Application Support/PodcastTranscriptStudio/Models" \
+  --include-local-asr
+```
 
 To ship models inside the DMG, log in to Hugging Face, accept the required model licenses, and run `./scripts/package_models.sh`. That script copies model snapshots to:
 

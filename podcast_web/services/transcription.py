@@ -35,6 +35,8 @@ def build_transcription_command(settings, job_id: int, source_path: Path, filena
         mode_settings.worker_preset,
         "--text-model",
         DEFAULT_TEXT_MODEL,
+        "--asr-provider",
+        mode_settings.default_asr_provider,
     ]
     if diarize:
         cmd.append("--diarize")

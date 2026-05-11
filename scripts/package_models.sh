@@ -25,6 +25,7 @@ copy_repo() {
     echo "copied: $target_name"
   else
     echo "missing: $repo_path" >&2
+    return 1
   fi
 }
 
@@ -38,7 +39,14 @@ copy_latest_snapshot() {
     copy_repo "$repo_dir/$latest" "$(basename "${repo_slug}")" "$@"
   else
     echo "missing snapshots for $repo_slug" >&2
+    return 1
   fi
+}
+
+copy_optional_latest_snapshot() {
+  local repo_slug="$1"
+  shift
+  copy_latest_snapshot "$repo_slug" "$@" || true
 }
 
 missing=0
@@ -48,6 +56,10 @@ copy_latest_snapshot "pyannote/speaker-diarization-3.1" "config.yaml" || missing
 copy_latest_snapshot "pyannote/segmentation-3.0" "config.yaml" "pytorch_model.bin" || missing=1
 copy_latest_snapshot "pyannote/wespeaker-voxceleb-resnet34-LM" "config.yaml" "pytorch_model.bin" || missing=1
 copy_latest_snapshot "Qwen/Qwen3-0.6B" "config.json" "model.safetensors" "tokenizer.json" || missing=1
+copy_optional_latest_snapshot "Qwen/Qwen3-ASR-1.7B" "config.json"
+copy_optional_latest_snapshot "Qwen/Qwen3-ForcedAligner-0.6B" "config.json"
+copy_optional_latest_snapshot "XiaomiMiMo/MiMo-V2.5-ASR" "config.json"
+copy_optional_latest_snapshot "XiaomiMiMo/MiMo-Audio-Tokenizer" "config.json"
 
 patch_diarization_config() {
   python3 - "$MODELS_OUT" <<'PY'
@@ -75,6 +87,7 @@ PY
 
 cp "$WORKER_SRC/cli.py" "$SCRIPTS_OUT/cli.py"
 cp "$WORKER_SRC/text_refinement.py" "$SCRIPTS_OUT/text_refinement.py"
+cp "$WORKER_SRC/asr_engines.py" "$SCRIPTS_OUT/asr_engines.py"
 cp "$WORKER_SRC/transcribe_with_speaker_segmentation.py" "$SCRIPTS_OUT/transcribe_with_speaker_segmentation.py"
 echo "copied worker scripts"
 

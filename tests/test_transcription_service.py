@@ -34,6 +34,8 @@ def test_build_transcription_command_uses_packaged_worker(tmp_path):
     assert 'balanced' in cmd
     assert '--text-model' in cmd
     assert 'Qwen/Qwen3-0.6B' in cmd
+    assert '--asr-provider' in cmd
+    assert 'whisper' in cmd
     assert output_txt.name == 'transcript.txt'
     assert output_json.name == 'transcript.json'
 
@@ -53,5 +55,25 @@ def test_build_transcription_command_can_switch_to_quick_mode(tmp_path):
 
     assert '--preset' in cmd
     assert 'lite' in cmd
+    assert 'whisper' in cmd
     assert '--keep-fillers' in cmd
     assert '--diarize' not in cmd
+
+
+def test_build_transcription_command_uses_qwen_auto_for_high_quality(tmp_path):
+    from podcast_web.services.transcription import build_transcription_command
+
+    cmd, _, _ = build_transcription_command(
+        settings=make_settings(tmp_path),
+        job_id=14,
+        source_path=tmp_path / 'demo.m4a',
+        filename='demo.m4a',
+        diarize=True,
+        clean_fillers=True,
+        mode='high_quality',
+    )
+
+    provider_index = cmd.index('--asr-provider')
+    preset_index = cmd.index('--preset')
+    assert cmd[preset_index + 1] == 'production'
+    assert cmd[provider_index + 1] == 'auto'

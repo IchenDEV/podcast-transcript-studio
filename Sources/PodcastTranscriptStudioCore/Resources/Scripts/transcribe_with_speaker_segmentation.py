@@ -19,13 +19,19 @@ import os
 import re
 import subprocess
 import wave
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import numpy as np
-from transformers import pipeline
+try:
+    from packages.python_worker.asr_engines import (
+        ASRUtterance,
+        DEFAULT_QWEN_ALIGNER_MODEL,
+        DEFAULT_QWEN_ASR_MODEL,
+        transcribe_with_provider,
+    )
+except ModuleNotFoundError:
+    from asr_engines import ASRUtterance, DEFAULT_QWEN_ALIGNER_MODEL, DEFAULT_QWEN_ASR_MODEL, transcribe_with_provider
 
 try:
     from packages.python_worker.text_refinement import (
@@ -44,6 +50,7 @@ except ImportError:
 PRESET_DEFAULTS = {
     "production": {
         "engine": "auto",
+        "asr_provider": "auto",
         "asr_model": "openai/whisper-large-v3",
         "asr_language": "zh",
         "section_seconds": 180,
@@ -54,6 +61,7 @@ PRESET_DEFAULTS = {
     },
     "balanced": {
         "engine": "auto",
+        "asr_provider": "whisper",
         "asr_model": "openai/whisper-base",
         "asr_language": "zh",
         "section_seconds": 240,
@@ -64,6 +72,7 @@ PRESET_DEFAULTS = {
     },
     "lite": {
         "engine": "transformers",
+        "asr_provider": "whisper",
         "asr_model": "openai/whisper-tiny",
         "asr_language": "zh",
         "section_seconds": 300,
@@ -158,15 +167,6 @@ FALLBACK_SIMPLIFIED_TO_TRADITIONAL = str.maketrans({
 })
 
 
-@dataclass
-class ASRUtterance:
-    start: float
-    end: float
-    text: str
-    speaker: str = "说话人1"
-    score: Optional[float] = None
-
-
 def fmt_time(seconds: float) -> str:
     total_ms = int(max(seconds, 0) * 1000)
     h, rem = divmod(total_ms, 3600000)
@@ -252,20 +252,6 @@ def clean_text(text: str, remove_fillers: bool = True, chinese_variant: str = "s
     return normalize_chinese_variant(t, chinese_variant)
 
 
-def _coerce_timestamps(item) -> Tuple[float, float]:
-    start = item.get("start")
-    end = item.get("end")
-    if start is None or end is None:
-        ts = item.get("timestamp")
-        if isinstance(ts, (list, tuple)) and len(ts) >= 2:
-            start, end = ts[0], ts[1]
-    if start is None:
-        start = 0.0
-    if end is None:
-        end = start
-    return float(start), float(end)
-
-
 def _merge_consecutive(chunks: List[ASRUtterance], gap: float = 0.25, chinese_variant: str = "simplified") -> List[ASRUtterance]:
     if not chunks:
         return chunks
@@ -287,12 +273,12 @@ def _merge_consecutive(chunks: List[ASRUtterance], gap: float = 0.25, chinese_va
     return merged
 
 
-def _dedup_chunks(chunks: List[ASRUtterance]) -> List[ASRUtterance]:
+def _dedup_chunks(chunks: List[ASRUtterance], chinese_variant: str = "simplified") -> List[ASRUtterance]:
     chunks = sorted(chunks, key=lambda x: x.start)
     out: List[ASRUtterance] = []
     seen = set()
     for c in chunks:
-        c.text = clean_text(c.text)
+        c.text = clean_text(c.text, chinese_variant=chinese_variant)
         if not c.text:
             continue
         key = (round(c.start, 2), round(c.end, 2), c.text)
@@ -307,138 +293,6 @@ def _dedup_chunks(chunks: List[ASRUtterance]) -> List[ASRUtterance]:
     return out
 
 
-def extract_chunks(asr_result) -> List[ASRUtterance]:
-    chunks: List[ASRUtterance] = []
-    if isinstance(asr_result, dict):
-        raw_chunks = asr_result.get("chunks")
-        if isinstance(raw_chunks, list) and raw_chunks:
-            for item in raw_chunks:
-                if not isinstance(item, dict):
-                    continue
-                txt = clean_text(item.get("text") or "")
-                if not txt:
-                    continue
-                start, end = _coerce_timestamps(item)
-                if end <= start:
-                    end = start + 0.5
-                chunks.append(ASRUtterance(start=start, end=end, text=txt))
-            if chunks:
-                return _dedup_chunks(_merge_consecutive(chunks))
-
-        txt = clean_text(asr_result.get("text") or "")
-        if txt:
-            chunks.append(ASRUtterance(0.0, 0.5, text=txt))
-            return chunks
-
-    if isinstance(asr_result, list):
-        for item in asr_result:
-            if not isinstance(item, dict):
-                continue
-            txt = clean_text(item.get("text") or "")
-            if not txt:
-                continue
-            start, end = _coerce_timestamps(item)
-            if end <= start:
-                end = start + 0.5
-            chunks.append(ASRUtterance(start=start, end=end, text=txt))
-
-    prev_end = 0.0
-    for idx, u in enumerate(chunks):
-        if u.end <= u.start:
-            u.end = u.start + 0.5
-        if u.start <= 0 and idx > 0:
-            u.start = prev_end
-            if u.end <= u.start:
-                u.end = u.start + 0.5
-        prev_end = max(prev_end, u.end)
-
-    return _dedup_chunks(_merge_consecutive(chunks))
-
-
-def extract_chunks_faster_whisper(result) -> List[ASRUtterance]:
-    if result is None:
-        return []
-    segments = result[0] if isinstance(result, tuple) and len(result) >= 1 else result
-    chunks: List[ASRUtterance] = []
-    for seg in segments:
-        if isinstance(seg, dict):
-            txt = clean_text(seg.get("text", ""))
-            start = float(seg.get("start", 0.0))
-            end = float(seg.get("end", start + 0.5))
-            score = seg.get("avg_logprob")
-        else:
-            txt = clean_text(getattr(seg, "text", ""))
-            start = float(getattr(seg, "start", 0.0))
-            end = float(getattr(seg, "end", start + 0.5))
-            score = getattr(seg, "avg_logprob", None)
-        if not txt:
-            continue
-        if end <= start:
-            end = start + 0.5
-        chunks.append(ASRUtterance(start=start, end=end, text=txt, score=score))
-    return _dedup_chunks(_merge_consecutive(chunks))
-
-
-def _has_module(module_name: str) -> bool:
-    try:
-        import importlib.util
-        return importlib.util.find_spec(module_name) is not None
-    except Exception:
-        return False
-
-
-def build_asr_pipeline(model: str, lang: str, device: str = "cpu", chunk_s: int = 30, batch: int = 4, engine: str = "transformers"):
-    if engine == "faster-whisper":
-        if not _has_module("faster_whisper"):
-            raise RuntimeError("faster-whisper 未安装")
-        from faster_whisper import WhisperModel
-        compute_type = "float16" if device.lower() == "cuda" else "int8"
-        dev = "cuda" if device.lower() == "cuda" else "cpu"
-        return WhisperModel(model, device=dev, compute_type=compute_type)
-
-    device_id = 0 if device.lower() == "cuda" else -1
-    gen_kwargs = {"task": "transcribe"}
-    if lang and lang.lower() != "auto":
-        gen_kwargs["language"] = lang
-    disable_transformers_torchcodec_probe()
-    return pipeline(
-        "automatic-speech-recognition",
-        model=model,
-        device=device_id,
-        return_timestamps=True,
-        chunk_length_s=chunk_s,
-        stride_length_s=(4, 2),
-        batch_size=batch,
-        generate_kwargs=gen_kwargs,
-    )
-
-
-def disable_transformers_torchcodec_probe() -> None:
-    try:
-        from transformers.pipelines import automatic_speech_recognition
-
-        automatic_speech_recognition.is_torchcodec_available = lambda: False
-    except Exception:
-        pass
-
-
-def transcribe_audio(asr_engine, wav: Path, backend: str, lang: str, chunk_s: int, batch_size: int, beam: int = 5, vad: bool = False):
-    if backend == "faster-whisper":
-        return asr_engine.transcribe(
-            str(wav),
-            beam_size=beam,
-            language=lang if lang and lang.lower() != "auto" else None,
-            vad_filter=vad,
-            word_timestamps=True,
-        )[0]
-    return asr_engine(_load_wav_for_transformers(wav), batch_size=batch_size, chunk_length_s=chunk_s)
-
-
-def _load_wav_for_transformers(wav: Path) -> dict:
-    audio, sample_rate = _read_wav_float32(wav)
-    return {"array": audio, "sampling_rate": sample_rate}
-
-
 def _load_wav_for_pyannote(wav: Path) -> dict:
     import torch
 
@@ -450,6 +304,8 @@ def _load_wav_for_pyannote(wav: Path) -> dict:
 
 
 def _read_wav_float32(wav: Path) -> Tuple[np.ndarray, int]:
+    import numpy as np
+
     with wave.open(str(wav), "rb") as reader:
         channels = reader.getnchannels()
         sample_width = reader.getsampwidth()
@@ -648,31 +504,10 @@ def export_json(utterances: List[ASRUtterance], out_file: Path) -> None:
     out_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def pick_engine(requested: str) -> List[str]:
-    if requested == "faster-whisper":
-        return ["faster-whisper", "transformers"]
-    if requested == "transformers":
-        return ["transformers"]
-    if _has_module("faster_whisper"):
-        return ["faster-whisper", "transformers"]
-    return ["transformers", "faster-whisper"]
-
-
-def build_asr_with_fallback(model: str, lang: str, device: str, chunk_s: int, batch: int, requested: str):
-    last_error: Optional[Exception] = None
-    for engine in pick_engine(requested):
-        try:
-            asr = build_asr_pipeline(model=model, lang=lang, device=device, chunk_s=chunk_s, batch=batch, engine=engine)
-            print(f"[info] 使用 ASR 后端: {engine}")
-            return asr, engine
-        except Exception as e:
-            print(f"[warn] 尝试 {engine} 失败: {type(e).__name__}: {e}")
-            last_error = e
-    raise RuntimeError(f"ASR 引擎初始化失败: {last_error}")
-
-
 def apply_preset_defaults(args):
     preset = PRESET_DEFAULTS[args.preset]
+    if args.asr_provider is None:
+        args.asr_provider = preset["asr_provider"]
     if args.asr_model is None:
         args.asr_model = preset["asr_model"]
     if args.section_seconds == 0:
@@ -692,18 +527,24 @@ def apply_preset_defaults(args):
     return args
 
 
-def parse_args():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="Audio ASR with speaker labels + sentence split + cleanup")
     ap.add_argument("--audio", required=True, help="输入音频")
     ap.add_argument("--output", required=True, help="文本输出路径")
     ap.add_argument("--preset", default="production", choices=sorted(PRESET_DEFAULTS.keys()), help="预置配置")
     ap.add_argument("--asr-model", default=None, help="ASR 模型名/本地路径")
+    ap.add_argument("--asr-provider", default=None, choices=["auto", "whisper", "qwen3", "mimo"], help="ASR provider（默认按预置选择）")
     ap.add_argument("--language", default="zh", help="ASR 语言码")
     ap.add_argument("--section-seconds", type=int, default=0, help="每段秒数（0=预置值）")
     ap.add_argument("--chunk-length", type=int, default=0, help="Whisper chunk 长度（0=预置值）")
     ap.add_argument("--batch-size", type=int, default=0, help="transformers 批大小（0=预置值）")
     ap.add_argument("--asr-device", default="cpu", choices=["cpu", "cuda"], help="ASR 设备")
     ap.add_argument("--engine", default="auto", choices=["auto", "transformers", "faster-whisper"], help="ASR 引擎")
+    ap.add_argument("--qwen-asr-model", default=DEFAULT_QWEN_ASR_MODEL, help="Qwen3-ASR 模型名或本地路径")
+    ap.add_argument("--qwen-aligner-model", default=DEFAULT_QWEN_ALIGNER_MODEL, help="Qwen3 ForcedAligner 模型名或本地路径")
+    ap.add_argument("--mimo-model-path", default=None, help="MiMo-V2.5-ASR 模型目录")
+    ap.add_argument("--mimo-tokenizer-path", default=None, help="MiMo-Audio-Tokenizer 目录")
+    ap.add_argument("--mimo-source-dir", default=None, help="MiMo-V2.5-ASR 官方源码目录")
     ap.add_argument("--beam-size", type=int, default=0, help="faster-whisper beam_size")
     ap.add_argument("--vad", action="store_true", help="faster-whisper 开启 VAD")
     ap.add_argument("--no-vad", action="store_true", help="显式关闭 VAD")
@@ -717,7 +558,7 @@ def parse_args():
     ap.add_argument("--keep-fillers", action="store_true", help="保留口语词，不做清洗")
     ap.add_argument("--chinese-variant", default="simplified", choices=["simplified", "traditional", "original"], help="中文输出字形")
     ap.add_argument("--json", default=None, help="导出 JSON")
-    return ap.parse_args()
+    return ap.parse_args(argv)
 
 
 def main() -> None:
@@ -734,30 +575,23 @@ def main() -> None:
 
     wav = ensure_wav16k_mono(audio, temp_wav_path(audio))
 
-    asr, final_engine = build_asr_with_fallback(
-        model=args.asr_model,
+    asr_chunks, final_engine, final_model = transcribe_with_provider(
+        provider=args.asr_provider,
+        wav=wav,
+        whisper_model=args.asr_model,
         lang=args.language,
         device=args.asr_device,
         chunk_s=args.chunk_length,
-        batch=args.batch_size,
-        requested=args.engine,
-    )
-
-    raw_result = transcribe_audio(
-        asr_engine=asr,
-        wav=wav,
-        backend=final_engine,
-        lang=args.language,
-        chunk_s=args.chunk_length,
         batch_size=args.batch_size,
+        whisper_engine=args.engine,
         beam=args.beam_size,
         vad=args.vad,
+        qwen_asr_model=args.qwen_asr_model,
+        qwen_aligner_model=args.qwen_aligner_model,
+        mimo_model_path=args.mimo_model_path,
+        mimo_tokenizer_path=args.mimo_tokenizer_path,
+        mimo_source_dir=args.mimo_source_dir,
     )
-
-    if final_engine == "faster-whisper":
-        asr_chunks = extract_chunks_faster_whisper(raw_result)
-    else:
-        asr_chunks = extract_chunks(raw_result)
 
     for chunk in asr_chunks:
         chunk.text = clean_text(
@@ -765,7 +599,10 @@ def main() -> None:
             remove_fillers=not args.keep_fillers,
             chinese_variant=args.chinese_variant,
         )
-    asr_chunks = _dedup_chunks(_merge_consecutive(asr_chunks, chinese_variant=args.chinese_variant))
+    asr_chunks = _dedup_chunks(
+        _merge_consecutive(asr_chunks, chinese_variant=args.chinese_variant),
+        chinese_variant=args.chinese_variant,
+    )
 
     speaker_spans = []
     if args.diarize:
@@ -800,8 +637,9 @@ def main() -> None:
         return
 
     print(f"预置：{args.preset}")
+    print(f"ASR provider：{args.asr_provider}")
     print(f"ASR 后端：{final_engine}")
-    print(f"ASR 模型：{args.asr_model}")
+    print(f"ASR 模型：{final_model}")
     print(f"已输出：{out_txt}")
     if args.json:
         print(f"JSON：{Path(args.json).resolve()}")

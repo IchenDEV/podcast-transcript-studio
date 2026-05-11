@@ -19,7 +19,13 @@ public struct WorkerCommandBuilder {
         self.configuration = configuration
     }
 
-    public func makeCommand(job: TranscriptionJob, sourceURL: URL, diarize: Bool, cleanFillers: Bool) throws -> WorkerCommand {
+    public func makeCommand(
+        job: TranscriptionJob,
+        sourceURL: URL,
+        diarize: Bool,
+        cleanFillers: Bool,
+        mode: TranscriptionMode = .standard
+    ) throws -> WorkerCommand {
         guard !sourceURL.path.isEmpty else { throw WorkerCommandError.unsupportedSource }
 
         let outputDirectory = configuration.jobsDirectory.appendingPathComponent(job.id.uuidString, isDirectory: true)
@@ -32,11 +38,27 @@ public struct WorkerCommandBuilder {
             "--audio", sourceURL.path,
             "--output", outputTextURL.path,
             "--json", outputJSONURL.path,
-            "--preset", "balanced",
+            "--preset", mode.workerPreset,
             "--chinese-variant", configuration.chineseTextVariant.rawValue,
+            "--asr-provider", mode.defaultASRProvider,
         ]
         if let asrModelURL = firstExistingModel(named: "whisper-tiny") {
             arguments.append(contentsOf: ["--asr-model", asrModelURL.path])
+        }
+        if let qwenASRModelURL = firstExistingModel(named: "Qwen3-ASR-1.7B") {
+            arguments.append(contentsOf: ["--qwen-asr-model", qwenASRModelURL.path])
+        }
+        if let qwenAlignerModelURL = firstExistingModel(named: "Qwen3-ForcedAligner-0.6B") {
+            arguments.append(contentsOf: ["--qwen-aligner-model", qwenAlignerModelURL.path])
+        }
+        if let mimoModelURL = firstExistingModel(named: "MiMo-V2.5-ASR") {
+            arguments.append(contentsOf: ["--mimo-model-path", mimoModelURL.path])
+        }
+        if let mimoTokenizerURL = firstExistingModel(named: "MiMo-Audio-Tokenizer") {
+            arguments.append(contentsOf: ["--mimo-tokenizer-path", mimoTokenizerURL.path])
+        }
+        if let mimoSourceURL = firstExistingModel(named: "MiMo-V2.5-ASR-source") {
+            arguments.append(contentsOf: ["--mimo-source-dir", mimoSourceURL.path])
         }
         if diarize { arguments.append("--diarize") }
         if diarize, let diarizationModelURL = firstExistingModel(named: "speaker-diarization-3.1") {
