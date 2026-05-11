@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var podcastLink = ""
     @State private var diarize = true
     @State private var cleanFillers = true
+    @State private var transcriptionMode: TranscriptionMode = .standard
     @State private var selectedPanel: DetailPanel = .result
     @State private var transcriptMode: TranscriptDisplayMode = .detail
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -25,6 +26,7 @@ struct ContentView: View {
                 selectedPanel: $selectedPanel,
                 diarize: $diarize,
                 cleanFillers: $cleanFillers,
+                transcriptionMode: $transcriptionMode,
                 onImportAudio: {
                     showingImporter = true
                 },
@@ -165,7 +167,12 @@ struct ContentView: View {
 
         Task {
             do {
-                try await viewModel.startTranscription(sourceURL: url, diarize: diarize, cleanFillers: cleanFillers)
+                try await viewModel.startTranscription(
+                    sourceURL: url,
+                    diarize: diarize,
+                    cleanFillers: cleanFillers,
+                    mode: transcriptionMode
+                )
                 exportMessage = "转写完成：\(url.lastPathComponent)"
             } catch {
                 exportMessage = "转写失败：\(error.localizedDescription)"
@@ -185,7 +192,12 @@ struct ContentView: View {
         showingPodcastLinkSheet = false
         Task {
             do {
-                try await viewModel.startTranscription(podcastURL: url, diarize: diarize, cleanFillers: cleanFillers)
+                try await viewModel.startTranscription(
+                    podcastURL: url,
+                    diarize: diarize,
+                    cleanFillers: cleanFillers,
+                    mode: transcriptionMode
+                )
                 exportMessage = "转写完成：\(url.host ?? "播客链接")"
             } catch {
                 exportMessage = "链接导入失败：\(error.localizedDescription)"

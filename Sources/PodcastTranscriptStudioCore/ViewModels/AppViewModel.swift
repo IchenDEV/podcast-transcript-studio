@@ -58,7 +58,12 @@ public final class AppViewModel: ObservableObject {
         return try exporter.export(job: job, format: format, baseFilename: basename)
     }
 
-    public func startTranscription(sourceURL: URL, diarize: Bool = true, cleanFillers: Bool = true) async throws {
+    public func startTranscription(
+        sourceURL: URL,
+        diarize: Bool = true,
+        cleanFillers: Bool = true,
+        mode: TranscriptionMode = .standard
+    ) async throws {
         isRunningJob = true
         defer { isRunningJob = false }
         let job = TranscriptionJob(
@@ -78,7 +83,8 @@ public final class AppViewModel: ObservableObject {
                 sourceURL: sourceURL,
                 jobID: job.id,
                 diarize: diarize,
-                cleanFillers: cleanFillers
+                cleanFillers: cleanFillers,
+                mode: mode
             )
             objectWillChange.send()
             try persistJobs()
@@ -89,7 +95,12 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
-    public func startTranscription(podcastURL: URL, diarize: Bool = true, cleanFillers: Bool = true) async throws {
+    public func startTranscription(
+        podcastURL: URL,
+        diarize: Bool = true,
+        cleanFillers: Bool = true,
+        mode: TranscriptionMode = .standard
+    ) async throws {
         isRunningJob = true
         defer { isRunningJob = false }
         let job = TranscriptionJob(
@@ -112,7 +123,8 @@ public final class AppViewModel: ObservableObject {
                 sourceURL: sourceURL,
                 jobID: job.id,
                 diarize: diarize,
-                cleanFillers: cleanFillers
+                cleanFillers: cleanFillers,
+                mode: mode
             )
             objectWillChange.send()
             try persistJobs()

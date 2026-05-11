@@ -18,6 +18,8 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains("balanced"))
         XCTAssertTrue(command.arguments.contains("--chinese-variant"))
         XCTAssertTrue(command.arguments.contains("simplified"))
+        XCTAssertTrue(command.arguments.contains("--asr-provider"))
+        XCTAssertTrue(command.arguments.contains("whisper"))
         XCTAssertTrue(command.environment["PODCAST_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.environment["PODCAST_BUNDLED_MODELS_DIR"]?.hasSuffix("Models") == true)
         XCTAssertTrue(command.outputTextURL.path.contains(job.id.uuidString))
@@ -66,4 +68,40 @@ final class WorkerCommandBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains("--text-model"))
         XCTAssertTrue(command.arguments.contains(textModel.path))
     }
+
+    func test_command_builder_uses_auto_provider_for_high_quality_mode() throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        let config = AppConfiguration.preview(baseDirectory: base)
+        let qwen = config.modelsDirectory.appendingPathComponent("Qwen3-ASR-1.7B", isDirectory: true)
+        let aligner = config.modelsDirectory.appendingPathComponent("Qwen3-ForcedAligner-0.6B", isDirectory: true)
+        try FileManager.default.createDirectory(at: qwen, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: aligner, withIntermediateDirectories: true)
+
+        let command = try WorkerCommandBuilder(configuration: config).makeCommand(
+            job: TranscriptionJob(filename: "demo.m4a"),
+            sourceURL: URL(fileURLWithPath: "/tmp/input/demo.m4a"),
+            diarize: true,
+            cleanFillers: true,
+            mode: .highQuality
+        )
+
+        XCTAssertArgument(command.arguments, flag: "--preset", equals: "production")
+        XCTAssertArgument(command.arguments, flag: "--asr-provider", equals: "auto")
+        XCTAssertArgument(command.arguments, flag: "--qwen-asr-model", equals: qwen.path)
+        XCTAssertArgument(command.arguments, flag: "--qwen-aligner-model", equals: aligner.path)
+    }
+}
+
+private func XCTAssertArgument(
+    _ arguments: [String],
+    flag: String,
+    equals expected: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else {
+        XCTFail("Missing \(flag)", file: file, line: line)
+        return
+    }
+    XCTAssertEqual(arguments[index + 1], expected, file: file, line: line)
 }

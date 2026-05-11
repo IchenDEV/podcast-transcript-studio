@@ -6,6 +6,7 @@ def test_apply_preset_defaults_uses_balanced_values():
 
     args = SimpleNamespace(
         preset='balanced',
+        asr_provider=None,
         asr_model=None,
         section_seconds=0,
         chunk_length=0,
@@ -19,6 +20,7 @@ def test_apply_preset_defaults_uses_balanced_values():
     updated = apply_preset_defaults(args)
 
     assert updated.asr_model == 'openai/whisper-base'
+    assert updated.asr_provider == 'whisper'
     assert updated.section_seconds == 240
     assert updated.chunk_length == 30
     assert updated.batch_size == 4

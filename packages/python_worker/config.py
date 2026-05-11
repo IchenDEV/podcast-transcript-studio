@@ -3,6 +3,7 @@ from __future__ import annotations
 PRESET_DEFAULTS = {
     'production': {
         'engine': 'auto',
+        'asr_provider': 'auto',
         'asr_model': 'openai/whisper-large-v3',
         'asr_language': 'zh',
         'section_seconds': 180,
@@ -13,6 +14,7 @@ PRESET_DEFAULTS = {
     },
     'balanced': {
         'engine': 'auto',
+        'asr_provider': 'whisper',
         'asr_model': 'openai/whisper-base',
         'asr_language': 'zh',
         'section_seconds': 240,
@@ -23,6 +25,7 @@ PRESET_DEFAULTS = {
     },
     'lite': {
         'engine': 'transformers',
+        'asr_provider': 'whisper',
         'asr_model': 'openai/whisper-tiny',
         'asr_language': 'zh',
         'section_seconds': 300,
@@ -36,6 +39,8 @@ PRESET_DEFAULTS = {
 
 def apply_preset_defaults(args):
     preset = PRESET_DEFAULTS[args.preset]
+    if getattr(args, 'asr_provider', None) is None:
+        args.asr_provider = preset['asr_provider']
     if args.asr_model is None:
         args.asr_model = preset['asr_model']
     if args.section_seconds == 0:
