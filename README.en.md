@@ -16,14 +16,54 @@ The project is a working development version with the following capabilities:
 - Choose quick, standard, or high-quality modes
 - Share the Python worker design across the web and macOS entrypoints
 
-## Quick Start
+## Install the CLI
+
+The simplest path is an isolated `pipx` install:
+
+```bash
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+pipx install "podcast-transcript-studio[worker] @ git+https://github.com/IchenDEV/podcast-transcript-studio.git"
+```
+
+If you already use `uv`:
+
+```bash
+uv tool install "podcast-transcript-studio[worker] @ git+https://github.com/IchenDEV/podcast-transcript-studio.git"
+```
+
+On macOS, install `ffmpeg` first:
+
+```bash
+brew install ffmpeg
+```
+
+Check the command after installation:
+
+```bash
+podcast-transcript-studio --help
+```
+
+Install from source:
+
+```bash
+git clone https://github.com/IchenDEV/podcast-transcript-studio.git
+cd podcast-transcript-studio
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[worker,web,dev]"
+```
+
+Repository development can still use `requirements*.lock` when you need the exact dependency versions currently verified in this repo.
+
+## Web Entrypoint
 
 The web entrypoint is the recommended first path.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.lock
+python -m pip install -e ".[web,worker]"
 ```
 
 ```bash
@@ -37,6 +77,36 @@ Open:
 Upload a file or paste a public podcast URL, choose a mode, and create a job. After the job completes, the result page shows the transcript and download links.
 
 URL import only handles publicly accessible audio pages, RSS feeds, and direct audio links. For login-only or paid content, download the audio file first.
+
+## Command-Line Transcription
+
+Local file:
+
+```bash
+podcast-transcript-studio ./demo.m4a --mode quick --output transcripts/demo.txt --json
+```
+
+Public podcast URL:
+
+```bash
+podcast-transcript-studio "https://podcasts.apple.com/..." --mode standard --output-dir transcripts --json
+```
+
+Common options:
+
+- `--mode quick|standard|high_quality`
+- `--diarize` / `--no-diarize`
+- `--asr-provider auto|whisper|qwen3|mimo`
+- `--skip-text-refinement`
+- `--keep-fillers`
+
+When `--output` is omitted, text files are written to `transcripts/`. Public podcast URLs are downloaded to `.pts-cli/audio/` before the local worker runs.
+
+Inside a source checkout, you can also run the module directly:
+
+```bash
+python -m podcast_transcript_studio ./demo.m4a --output transcripts/demo.txt
+```
 
 ## Model Files
 
@@ -52,10 +122,16 @@ Local model resource directory:
 
 The macOS settings view can change the model directory and download the required models. For speaker diarization, accept the required pyannote model licenses on Hugging Face first, then paste a token in the settings view.
 
-Qwen3-ASR and MiMo-V2.5-ASR need heavier optional dependencies. Install them only for local high quality ASR:
+Qwen3-ASR and MiMo-V2.5-ASR need heavier optional dependencies. After a `pipx` install, add the local high-quality ASR dependency with:
 
 ```bash
-python -m pip install -r requirements-local-asr.txt
+pipx inject podcast-transcript-studio "qwen-asr>=0.1"
+```
+
+Inside a source environment:
+
+```bash
+python -m pip install -e ".[local-asr]"
 ```
 
 To download Qwen3-ASR and MiMo-V2.5-ASR weights:

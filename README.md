@@ -16,14 +16,54 @@ Podcast Transcript Studio 是一个本地优先的播客转写工具。项目提
 - 提供快速、标准、高质量三种模式
 - Web 与 macOS 入口共用 Python worker 设计
 
-## 快速开始
+## 安装 CLI
+
+最简单的方式是用 `pipx` 安装一个独立的命令行工具：
+
+```bash
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+pipx install "podcast-transcript-studio[worker] @ git+https://github.com/IchenDEV/podcast-transcript-studio.git"
+```
+
+如果你已经在用 `uv`：
+
+```bash
+uv tool install "podcast-transcript-studio[worker] @ git+https://github.com/IchenDEV/podcast-transcript-studio.git"
+```
+
+macOS 需要先准备 `ffmpeg`：
+
+```bash
+brew install ffmpeg
+```
+
+安装后检查命令：
+
+```bash
+podcast-transcript-studio --help
+```
+
+从源码安装：
+
+```bash
+git clone https://github.com/IchenDEV/podcast-transcript-studio.git
+cd podcast-transcript-studio
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[worker,web,dev]"
+```
+
+仓库内开发也可以继续使用 `requirements*.lock`，它们固定了当前验证过的依赖版本。
+
+## 网页入口
 
 推荐先使用网页入口。
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.lock
+python -m pip install -e ".[web,worker]"
 ```
 
 ```bash
@@ -37,6 +77,36 @@ python -m uvicorn podcast_web.app:app --reload
 在首页上传文件，或粘贴公开播客链接，选择模式，然后创建任务。任务完成后可以在结果页查看文本并下载文件。
 
 链接导入只处理公开可访问的音频页面、RSS 和直连音频地址；需要登录或付费权限的内容请先下载成本地文件。
+
+## 命令行转写
+
+本地文件：
+
+```bash
+podcast-transcript-studio ./demo.m4a --mode quick --output transcripts/demo.txt --json
+```
+
+公开播客链接：
+
+```bash
+podcast-transcript-studio "https://podcasts.apple.com/..." --mode standard --output-dir transcripts --json
+```
+
+常用参数：
+
+- `--mode quick|standard|high_quality`
+- `--diarize` / `--no-diarize`
+- `--asr-provider auto|whisper|qwen3|mimo`
+- `--skip-text-refinement`
+- `--keep-fillers`
+
+未指定 `--output` 时，文本会写入 `transcripts/`。公开播客链接会先下载到 `.pts-cli/audio/`，再交给本地 worker 转写。
+
+源码目录里也可以直接运行：
+
+```bash
+python -m podcast_transcript_studio ./demo.m4a --output transcripts/demo.txt
+```
 
 ## 模型文件
 
@@ -52,10 +122,16 @@ python -m uvicorn podcast_web.app:app --reload
 
 macOS app 的设置页可以修改模型目录，并直接下载所需模型。需要使用多说话人能力时，先在 Hugging Face 接受 pyannote 相关模型许可，再在设置页填写 token。
 
-Qwen3-ASR / MiMo-V2.5-ASR 的依赖较重，不在默认 worker 依赖里。需要本地高质量 ASR 时，先安装可选依赖：
+Qwen3-ASR / MiMo-V2.5-ASR 的依赖较重，不在默认 worker 依赖里。用 `pipx` 安装后，需要本地高质量 ASR 时可以追加依赖：
 
 ```bash
-python -m pip install -r requirements-local-asr.txt
+pipx inject podcast-transcript-studio "qwen-asr>=0.1"
+```
+
+源码环境使用：
+
+```bash
+python -m pip install -e ".[local-asr]"
 ```
 
 如需下载 Qwen3-ASR 和 MiMo-V2.5-ASR 权重，可执行：
