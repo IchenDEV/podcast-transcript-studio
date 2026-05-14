@@ -1,0 +1,4 @@
+interface:
+  display_name: "Podcast Transcript Studio"
+  short_description: "Transcribe podcasts with the local CLI"
+  default_prompt: "Use $podcast-transcript-studio to transcribe this podcast URL into text."
